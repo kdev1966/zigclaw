@@ -11,24 +11,36 @@ services:
     volumes:
       - zigclaw-data:/root/.zigclaw
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   gateway:
     build: .
     image: zigclaw:latest
     profiles: ["gateway"]
     ports:
-      - "8080:8080"
+      - "${ZIGCLAW_GATEWAY_PORT:-3000}:${ZIGCLAW_GATEWAY_PORT:-3000}"
     env_file:
       - path: .env
         required: false
     volumes:
-      - zigclaw-data:/root/.zigclaw
+      - ./config.json:/zigclaw-data/.zigclaw/config.json:ro
+      - zigclaw-data:/zigclaw-data/workspace
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-sf", "http://localhost:${ZIGCLAW_GATEWAY_PORT:-3000}/health"]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   zigclaw-data:
