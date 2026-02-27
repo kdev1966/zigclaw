@@ -201,7 +201,8 @@ pub const Config = struct {
         // Try to read existing config file
         if (std.fs.openFileAbsolute(config_path, .{})) |file| {
             defer file.close();
-            const content = try file.readToEndAlloc(allocator, 1024 * 64);
+            const raw = try file.readToEndAlloc(allocator, 1024 * 64);
+            const content = try interpolateEnvVars(allocator, raw);
             cfg.parseJson(content) catch |err| switch (err) {
                 error.OutOfMemory => return error.OutOfMemory,
                 else => {}, // malformed JSON — use defaults for unparsed fields
@@ -769,6 +770,55 @@ pub const Config = struct {
         }
     }
 };
+
+// ── Env-var interpolation ────────────────────────────────────────
+//
+// Replaces ${VAR_NAME} placeholders in a JSON string with the value of the
+// corresponding environment variable before the config is parsed.
+// Placeholders for variables that are not set are left unchanged and a warning
+// is logged so users know a substitution was skipped.
+//
+// The function returns `input` directly (no allocation) when the string
+// contains no `${` sequences.  Otherwise it returns a freshly-allocated
+// replacement owned by `allocator`.
+
+const config_log = std.log.scoped(.config);
+
+fn interpolateEnvVars(allocator: std.mem.Allocator, input: []const u8) ![]const u8 {
+    if (std.mem.indexOf(u8, input, "${") == null) return input;
+
+    var out: std.ArrayListUnmanaged(u8) = .empty;
+    errdefer out.deinit(allocator);
+
+    var i: usize = 0;
+    while (i < input.len) {
+        // Detect start of a placeholder: ${
+        if (i + 1 < input.len and input[i] == '$' and input[i + 1] == '{') {
+            const name_start = i + 2;
+            if (std.mem.indexOfScalarPos(u8, input, name_start, '}')) |close| {
+                const name = input[name_start..close];
+                if (std.process.getEnvVarOwned(allocator, name)) |value| {
+                    defer allocator.free(value);
+                    try out.appendSlice(allocator, value);
+                } else |err| switch (err) {
+                    error.EnvironmentVariableNotFound => {
+                        // Variable not set — keep the placeholder and warn
+                        config_log.warn("config: env var not set: ${{{s}}}", .{name});
+                        try out.appendSlice(allocator, input[i .. close + 1]);
+                    },
+                    else => return err,
+                }
+                i = close + 1;
+                continue;
+            }
+            // No closing '}' found — treat '$' as a literal character
+        }
+        try out.append(allocator, input[i]);
+        i += 1;
+    }
+
+    return out.toOwnedSlice(allocator);
+}
 
 // ── Tests ───────────────────────────────────────────────────────
 
@@ -3084,4 +3134,39 @@ test "session config: all dm_scope values accepted" {
         try cfg.parseJson(json);
         try std.testing.expectEqual(c[1], cfg.session.dm_scope);
     }
+}
+
+test "interpolateEnvVars: no placeholder returns same pointer" {
+    const allocator = std.testing.allocator;
+    const input = "{\"key\": \"value\"}";
+    const result = try interpolateEnvVars(allocator, input);
+    // No allocation: same slice returned
+    try std.testing.expectEqual(input.ptr, result.ptr);
+}
+
+test "interpolateEnvVars: unknown var leaves placeholder intact" {
+    const allocator = std.testing.allocator;
+    const input = "{\"key\": \"${ZIGCLAW_TEST_UNDEFINED_VAR_XYZ}\"}";
+    const result = try interpolateEnvVars(allocator, input);
+    defer allocator.free(result);
+    try std.testing.expectEqualStrings(input, result);
+}
+
+test "interpolateEnvVars: known var is substituted" {
+    const allocator = std.testing.allocator;
+    // Use PATH which is always set on Linux/macOS/Docker; skip on Windows where it may vary
+    const path_val = std.process.getEnvVarOwned(allocator, "PATH") catch return;
+    defer allocator.free(path_val);
+    const input = "${PATH}";
+    const result = try interpolateEnvVars(allocator, input);
+    defer allocator.free(result);
+    try std.testing.expectEqualStrings(path_val, result);
+}
+
+test "interpolateEnvVars: unclosed brace is literal" {
+    const allocator = std.testing.allocator;
+    const input = "price: ${no close";
+    const result = try interpolateEnvVars(allocator, input);
+    defer allocator.free(result);
+    try std.testing.expectEqualStrings(input, result);
 }
