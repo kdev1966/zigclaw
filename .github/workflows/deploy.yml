@@ -1,0 +1,32 @@
+name: Deploy zigclaw
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build & redeploy
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Build Docker image
+        run: |
+          docker compose build --no-cache
+
+      - name: Redeploy gateway
+        run: |
+          docker compose --profile gateway up -d
+
+      - name: Health check
+        run: |
+          sleep 15
+          curl -sf http://localhost:${ZIGCLAW_GATEWAY_PORT:-3000}/health \
+            && echo "Gateway OK" \
+            || (docker compose --profile gateway logs --tail=50 && exit 1)
