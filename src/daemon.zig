@@ -741,6 +741,30 @@ pub fn run(allocator: std.mem.Allocator, config: *const Config, host: []const u8
         }
     }
 
+    // SkillForge — one-shot background discovery on startup
+    if (config.skillforge.enabled) {
+        const sf_config = config.skillforge;
+        const sf_alloc = allocator;
+        const sf_workspace = config.workspace_dir;
+        _ = std.Thread.spawn(.{ .stack_size = 256 * 1024 }, struct {
+            fn run(alloc: std.mem.Allocator, cfg: @import("config.zig").SkillForgeConfig, workspace: []const u8) void {
+                const sf = @import("skillforge.zig");
+                var effective = cfg;
+                // Default output_dir to workspace/skills if not explicitly set
+                if (std.mem.eql(u8, cfg.output_dir, "./skills")) {
+                    effective.output_dir = std.fmt.allocPrint(alloc, "{s}/skills", .{workspace}) catch return;
+                }
+                const report = sf.forge(alloc, effective) catch return;
+                std.debug.print(
+                    "skillforge: discovered={d} integrated={d} skipped={d}\n",
+                    .{ report.discovered, report.auto_integrated, report.skipped },
+                );
+            }
+        }.run, .{ sf_alloc, sf_config, sf_workspace }) catch |err| {
+            stdout.print("Warning: skillforge thread failed: {}\n", .{err}) catch {};
+        };
+    }
+
     // Outbound dispatcher (created before supervisor so channels can register)
     var channel_registry = dispatch.ChannelRegistry.init(allocator);
     defer channel_registry.deinit();

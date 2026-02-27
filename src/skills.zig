@@ -314,7 +314,7 @@ pub fn listSkills(allocator: std.mem.Allocator, workspace_dir: []const u8) ![]Sk
         skills_list.deinit(allocator);
     }
 
-    const dir = std.fs.cwd().openDir(skills_dir_path, .{ .iterate = true }) catch {
+    const dir = std.fs.openDirAbsolute(skills_dir_path, .{ .iterate = true }) catch {
         // Directory doesn't exist or can't be opened — return empty
         return try skills_list.toOwnedSlice(allocator);
     };

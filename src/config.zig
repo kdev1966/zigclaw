@@ -67,6 +67,7 @@ pub const AudioMediaConfig = config_types.AudioMediaConfig;
 pub const DmScope = config_types.DmScope;
 pub const IdentityLink = config_types.IdentityLink;
 pub const SessionConfig = config_types.SessionConfig;
+pub const SkillForgeConfig = @import("skillforge.zig").SkillForgeConfig;
 
 // ── Top-level Config ────────────────────────────────────────────
 
@@ -115,6 +116,7 @@ pub const Config = struct {
     security: SecurityConfig = .{},
     tools: ToolsConfig = .{},
     session: SessionConfig = .{},
+    skillforge: SkillForgeConfig = .{},
 
     // Convenience aliases for backward-compat flat access used by other modules.
     // These are set during load() to mirror nested values.

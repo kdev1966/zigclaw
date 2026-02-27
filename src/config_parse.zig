@@ -1671,4 +1671,26 @@ pub fn parseJson(self: *Config, content: []const u8) !void {
             }
         }
     }
+
+    // SkillForge
+    if (root.get("skillforge")) |sf| {
+        if (sf == .object) {
+            if (sf.object.get("enabled")) |v| {
+                if (v == .bool) self.skillforge.enabled = v.bool;
+            }
+            if (sf.object.get("auto_integrate")) |v| {
+                if (v == .bool) self.skillforge.auto_integrate = v.bool;
+            }
+            if (sf.object.get("scan_interval_hours")) |v| {
+                if (v == .integer) self.skillforge.scan_interval_hours = @intCast(v.integer);
+            }
+            if (sf.object.get("min_score")) |v| {
+                if (v == .float) self.skillforge.min_score = v.float;
+                if (v == .integer) self.skillforge.min_score = @floatFromInt(v.integer);
+            }
+            if (sf.object.get("output_dir")) |v| {
+                if (v == .string) self.skillforge.output_dir = try self.allocator.dupe(u8, v.string);
+            }
+        }
+    }
 }
