@@ -27,6 +27,37 @@ const PairingGuard = @import("security/pairing.zig").PairingGuard;
 const channels = @import("channels/root.zig");
 const bus_mod = @import("bus.zig");
 
+// ── Sub-modules (extracted) ─────────────────────────────────────
+const rate_limiter_mod = @import("gateway/rate_limiter.zig");
+const json_utils = @import("gateway/json_utils.zig");
+const http_utils = @import("gateway/http_utils.zig");
+const crypto = @import("gateway/crypto.zig");
+
+// Re-export extracted types so existing code continues to compile.
+pub const SlidingWindowRateLimiter = rate_limiter_mod.SlidingWindowRateLimiter;
+pub const GatewayRateLimiter = rate_limiter_mod.GatewayRateLimiter;
+pub const IdempotencyStore = rate_limiter_mod.IdempotencyStore;
+pub const ReadyResponse = http_utils.ReadyResponse;
+pub const handleReady = http_utils.handleReady;
+pub const parseQueryParam = http_utils.parseQueryParam;
+pub const validateBearerToken = http_utils.validateBearerToken;
+pub const extractHeader = http_utils.extractHeader;
+pub const extractBearerToken = http_utils.extractBearerToken;
+pub const isWebhookAuthorized = http_utils.isWebhookAuthorized;
+pub const formatPairSuccessResponse = http_utils.formatPairSuccessResponse;
+const asciiEqlIgnoreCase = http_utils.asciiEqlIgnoreCase;
+pub const jsonEscapeInto = json_utils.jsonEscapeInto;
+pub const jsonWrapField = json_utils.jsonWrapField;
+pub const jsonWrapResponse = json_utils.jsonWrapResponse;
+const jsonWrapChallenge = json_utils.jsonWrapChallenge;
+pub const jsonStringField = json_utils.jsonStringField;
+pub const jsonIntField = json_utils.jsonIntField;
+pub const verifyWhatsappSignature = crypto.verifyWhatsappSignature;
+const verifySlackSignature = crypto.verifySlackSignature;
+const hexDecode = crypto.hexDecode;
+const hexVal = crypto.hexVal;
+const constantTimeEql = crypto.constantTimeEql;
+
 /// Maximum request body size (64KB) — prevents memory exhaustion.
 pub const MAX_BODY_SIZE: usize = 65_536;
 
@@ -35,174 +66,6 @@ pub const REQUEST_TIMEOUT_SECS: u64 = 30;
 
 /// Sliding window for rate limiting (60s).
 pub const RATE_LIMIT_WINDOW_SECS: u64 = 60;
-
-/// How often the rate limiter sweeps stale IP entries (5 min).
-const RATE_LIMITER_SWEEP_INTERVAL_SECS: u64 = 300;
-
-// ── Rate Limiter ─────────────────────────────────────────────────
-
-/// Sliding-window rate limiter. Tracks timestamps per key.
-/// Not thread-safe by itself; callers must hold a lock.
-pub const SlidingWindowRateLimiter = struct {
-    limit_per_window: u32,
-    window_ns: i128,
-    /// Map of key -> list of request timestamps (as nanoTimestamp values).
-    entries: std.StringHashMapUnmanaged(std.ArrayList(i128)),
-    last_sweep: i128,
-
-    pub fn init(limit_per_window: u32, window_secs: u64) SlidingWindowRateLimiter {
-        return .{
-            .limit_per_window = limit_per_window,
-            .window_ns = @as(i128, @intCast(window_secs)) * 1_000_000_000,
-            .entries = .empty,
-            .last_sweep = std.time.nanoTimestamp(),
-        };
-    }
-
-    pub fn deinit(self: *SlidingWindowRateLimiter, allocator: std.mem.Allocator) void {
-        var iter = self.entries.iterator();
-        while (iter.next()) |entry| {
-            entry.value_ptr.deinit(allocator);
-        }
-        self.entries.deinit(allocator);
-    }
-
-    /// Returns true if the request is allowed, false if rate-limited.
-    pub fn allow(self: *SlidingWindowRateLimiter, allocator: std.mem.Allocator, key: []const u8) bool {
-        if (self.limit_per_window == 0) return true;
-
-        const now = std.time.nanoTimestamp();
-        const cutoff = now - self.window_ns;
-
-        // Periodic sweep
-        if (now - self.last_sweep > @as(i128, RATE_LIMITER_SWEEP_INTERVAL_SECS) * 1_000_000_000) {
-            self.sweep(allocator, cutoff);
-            self.last_sweep = now;
-        }
-
-        const gop = self.entries.getOrPut(allocator, key) catch return true;
-        if (!gop.found_existing) {
-            gop.value_ptr.* = .empty;
-        }
-
-        // Remove expired entries
-        var timestamps = gop.value_ptr;
-        var i: usize = 0;
-        while (i < timestamps.items.len) {
-            if (timestamps.items[i] <= cutoff) {
-                _ = timestamps.swapRemove(i);
-            } else {
-                i += 1;
-            }
-        }
-
-        if (timestamps.items.len >= self.limit_per_window) return false;
-
-        timestamps.append(allocator, now) catch return true;
-        return true;
-    }
-
-    fn sweep(self: *SlidingWindowRateLimiter, allocator: std.mem.Allocator, cutoff: i128) void {
-        var iter = self.entries.iterator();
-        var to_remove: std.ArrayList([]const u8) = .empty;
-        defer to_remove.deinit(allocator);
-
-        while (iter.next()) |entry| {
-            var timestamps = entry.value_ptr;
-            var i: usize = 0;
-            while (i < timestamps.items.len) {
-                if (timestamps.items[i] <= cutoff) {
-                    _ = timestamps.swapRemove(i);
-                } else {
-                    i += 1;
-                }
-            }
-            if (timestamps.items.len == 0) {
-                to_remove.append(allocator, entry.key_ptr.*) catch continue;
-            }
-        }
-
-        for (to_remove.items) |key| {
-            if (self.entries.fetchRemove(key)) |kv| {
-                var list = kv.value;
-                list.deinit(allocator);
-            }
-        }
-    }
-};
-
-// ── Gateway Rate Limiter ─────────────────────────────────────────
-
-pub const GatewayRateLimiter = struct {
-    pair: SlidingWindowRateLimiter,
-    webhook: SlidingWindowRateLimiter,
-
-    pub fn init(pair_per_minute: u32, webhook_per_minute: u32) GatewayRateLimiter {
-        return .{
-            .pair = SlidingWindowRateLimiter.init(pair_per_minute, RATE_LIMIT_WINDOW_SECS),
-            .webhook = SlidingWindowRateLimiter.init(webhook_per_minute, RATE_LIMIT_WINDOW_SECS),
-        };
-    }
-
-    pub fn deinit(self: *GatewayRateLimiter, allocator: std.mem.Allocator) void {
-        self.pair.deinit(allocator);
-        self.webhook.deinit(allocator);
-    }
-
-    pub fn allowPair(self: *GatewayRateLimiter, allocator: std.mem.Allocator, key: []const u8) bool {
-        return self.pair.allow(allocator, key);
-    }
-
-    pub fn allowWebhook(self: *GatewayRateLimiter, allocator: std.mem.Allocator, key: []const u8) bool {
-        return self.webhook.allow(allocator, key);
-    }
-};
-
-// ── Idempotency Store ────────────────────────────────────────────
-
-pub const IdempotencyStore = struct {
-    ttl_ns: i128,
-    /// Map of key -> timestamp when recorded.
-    keys: std.StringHashMapUnmanaged(i128),
-
-    pub fn init(ttl_secs: u64) IdempotencyStore {
-        return .{
-            .ttl_ns = @as(i128, @intCast(@max(ttl_secs, 1))) * 1_000_000_000,
-            .keys = .empty,
-        };
-    }
-
-    pub fn deinit(self: *IdempotencyStore, allocator: std.mem.Allocator) void {
-        self.keys.deinit(allocator);
-    }
-
-    /// Returns true if this key is new and is now recorded.
-    /// Returns false if this is a duplicate.
-    pub fn recordIfNew(self: *IdempotencyStore, allocator: std.mem.Allocator, key: []const u8) bool {
-        const now = std.time.nanoTimestamp();
-        const cutoff = now - self.ttl_ns;
-
-        // Clean expired keys (simple sweep)
-        var iter = self.keys.iterator();
-        var to_remove: std.ArrayList([]const u8) = .empty;
-        defer to_remove.deinit(allocator);
-        while (iter.next()) |entry| {
-            if (entry.value_ptr.* < cutoff) {
-                to_remove.append(allocator, entry.key_ptr.*) catch continue;
-            }
-        }
-        for (to_remove.items) |k| {
-            _ = self.keys.remove(k);
-        }
-
-        // Check if already present
-        if (self.keys.get(key)) |_| return false;
-
-        // Record new key
-        self.keys.put(allocator, key, now) catch return true;
-        return true;
-    }
-};
 
 // ── Gateway server ───────────────────────────────────────────────
 
@@ -241,7 +104,7 @@ pub const GatewayState = struct {
     pub fn initWithVerifyToken(allocator: std.mem.Allocator, verify_token: []const u8) GatewayState {
         return .{
             .allocator = allocator,
-            .rate_limiter = GatewayRateLimiter.init(10, 30),
+            .rate_limiter = GatewayRateLimiter.init(10, 30, RATE_LIMIT_WINDOW_SECS),
             .idempotency = IdempotencyStore.init(300),
             .whatsapp_verify_token = verify_token,
             .whatsapp_app_secret = "",
@@ -298,345 +161,6 @@ fn isHealthOk() bool {
     return true;
 }
 
-/// Readiness response — encapsulates HTTP status and body for /ready.
-pub const ReadyResponse = struct {
-    http_status: []const u8,
-    body: []const u8,
-    /// Whether body was allocated and should be freed by caller.
-    allocated: bool,
-};
-
-/// Handle the /ready endpoint logic. Queries the global health registry
-/// and returns the appropriate HTTP status and JSON body.
-/// If `allocated` is true in the result, the caller owns `body` memory.
-pub fn handleReady(allocator: std.mem.Allocator) ReadyResponse {
-    const readiness = health.checkRegistryReadiness(allocator) catch {
-        return .{
-            .http_status = "500 Internal Server Error",
-            .body = "{\"status\":\"not_ready\",\"checks\":[]}",
-            .allocated = false,
-        };
-    };
-    // formatJson must be called before freeing the checks slice
-    const json_body = readiness.formatJson(allocator) catch {
-        if (readiness.checks.len > 0) {
-            allocator.free(readiness.checks);
-        }
-        return .{
-            .http_status = "500 Internal Server Error",
-            .body = "{\"status\":\"not_ready\",\"checks\":[]}",
-            .allocated = false,
-        };
-    };
-    if (readiness.checks.len > 0) {
-        allocator.free(readiness.checks);
-    }
-    return .{
-        .http_status = if (readiness.status == .ready) "200 OK" else "503 Service Unavailable",
-        .body = json_body,
-        .allocated = true,
-    };
-}
-
-/// Extract a query parameter value from a URL target string.
-/// e.g. parseQueryParam("/whatsapp?hub.mode=subscribe&hub.challenge=abc", "hub.challenge") => "abc"
-/// Returns null if the parameter is not found.
-pub fn parseQueryParam(target: []const u8, name: []const u8) ?[]const u8 {
-    const qmark = std.mem.indexOf(u8, target, "?") orelse return null;
-    var query = target[qmark + 1 ..];
-
-    while (query.len > 0) {
-        // Find end of this key=value pair
-        const amp = std.mem.indexOf(u8, query, "&") orelse query.len;
-        const pair = query[0..amp];
-
-        // Split on '='
-        const eq = std.mem.indexOf(u8, pair, "=");
-        if (eq) |eq_pos| {
-            const key = pair[0..eq_pos];
-            const value = pair[eq_pos + 1 ..];
-            if (std.mem.eql(u8, key, name)) return value;
-        }
-
-        // Advance past the '&'
-        if (amp < query.len) {
-            query = query[amp + 1 ..];
-        } else {
-            break;
-        }
-    }
-    return null;
-}
-
-// ── Bearer Token Validation ──────────────────────────────────────
-
-/// Validate a bearer token against a list of paired tokens.
-/// Returns true if paired_tokens is empty (backwards compat) or token matches.
-pub fn validateBearerToken(token: []const u8, paired_tokens: []const []const u8) bool {
-    if (paired_tokens.len == 0) return true;
-    for (paired_tokens) |pt| {
-        if (std.mem.eql(u8, token, pt)) return true;
-    }
-    return false;
-}
-
-/// Extract the value of a named header from raw HTTP bytes.
-/// Searches for "Name: value\r\n" (case-insensitive name match).
-pub fn extractHeader(raw: []const u8, name: []const u8) ?[]const u8 {
-    // Skip past the first line (request line)
-    var pos: usize = 0;
-    while (pos + 1 < raw.len) {
-        if (raw[pos] == '\r' and raw[pos + 1] == '\n') {
-            pos += 2;
-            break;
-        }
-        pos += 1;
-    }
-
-    // Scan headers
-    while (pos < raw.len) {
-        // Find end of this header line
-        const line_end = std.mem.indexOf(u8, raw[pos..], "\r\n") orelse break;
-        const line = raw[pos .. pos + line_end];
-        if (line.len == 0) break; // empty line = end of headers
-
-        // Check if this line starts with "name:"
-        if (line.len > name.len and line[name.len] == ':') {
-            const header_name = line[0..name.len];
-            if (asciiEqlIgnoreCase(header_name, name)) {
-                // Skip ": " and any leading whitespace
-                var val_start: usize = name.len + 1;
-                while (val_start < line.len and line[val_start] == ' ') val_start += 1;
-                return line[val_start..];
-            }
-        }
-
-        pos += line_end + 2;
-    }
-    return null;
-}
-
-/// Extract the bearer token from an Authorization header value.
-/// "Bearer <token>" -> "<token>", or null if format doesn't match.
-pub fn extractBearerToken(auth_header: []const u8) ?[]const u8 {
-    const prefix = "Bearer ";
-    if (auth_header.len > prefix.len and std.mem.startsWith(u8, auth_header, prefix)) {
-        return auth_header[prefix.len..];
-    }
-    return null;
-}
-
-/// Returns true when a webhook request should be accepted for the current
-/// pairing state and bearer token. Missing pairing state fails closed.
-pub fn isWebhookAuthorized(pairing_guard: ?*const PairingGuard, bearer_token: ?[]const u8) bool {
-    const guard = pairing_guard orelse return false;
-    if (!guard.requirePairing()) return true;
-    const token = bearer_token orelse return false;
-    return guard.isAuthenticated(token);
-}
-
-/// Format the /pair success payload. Returns null when buffer is too small.
-pub fn formatPairSuccessResponse(buf: []u8, token: []const u8) ?[]const u8 {
-    return std.fmt.bufPrint(buf, "{{\"status\":\"paired\",\"token\":\"{s}\"}}", .{token}) catch null;
-}
-
-fn asciiEqlIgnoreCase(a: []const u8, b: []const u8) bool {
-    if (a.len != b.len) return false;
-    for (a, b) |ac, bc| {
-        const al = if (ac >= 'A' and ac <= 'Z') ac + 32 else ac;
-        const bl = if (bc >= 'A' and bc <= 'Z') bc + 32 else bc;
-        if (al != bl) return false;
-    }
-    return true;
-}
-
-// ── WhatsApp HMAC-SHA256 Signature Verification ─────────────────
-
-/// Verify a WhatsApp webhook HMAC-SHA256 signature.
-///
-/// Meta sends `X-Hub-Signature-256: sha256=<hex-digest>` on every webhook POST.
-/// This function computes HMAC-SHA256 over `body` using `app_secret` as the key,
-/// then performs a constant-time comparison against the hex digest in the header.
-///
-/// Returns `true` if the signature is valid, `false` otherwise.
-pub fn verifyWhatsappSignature(body: []const u8, signature_header: []const u8, app_secret: []const u8) bool {
-    // Reject empty secrets — misconfiguration guard
-    if (app_secret.len == 0) return false;
-
-    // Header must start with "sha256="
-    const prefix = "sha256=";
-    if (!std.mem.startsWith(u8, signature_header, prefix)) return false;
-
-    const provided_hex = signature_header[prefix.len..];
-
-    // HMAC-SHA256 digest is 32 bytes = 64 hex chars
-    if (provided_hex.len != 64) return false;
-
-    // Decode the provided hex string into bytes
-    const provided_bytes = hexDecode(provided_hex) orelse return false;
-
-    // Compute expected HMAC-SHA256
-    const HmacSha256 = std.crypto.auth.hmac.sha2.HmacSha256;
-    var expected: [HmacSha256.mac_length]u8 = undefined;
-    HmacSha256.create(&expected, body, app_secret);
-
-    // Constant-time comparison — prevents timing side-channels
-    return constantTimeEql(&expected, &provided_bytes);
-}
-
-/// Decode a 64-char lowercase hex string into 32 bytes.
-/// Returns null if any character is not a valid hex digit.
-fn hexDecode(hex: []const u8) ?[32]u8 {
-    if (hex.len != 64) return null;
-    var out: [32]u8 = undefined;
-    for (0..32) |i| {
-        const hi = hexVal(hex[i * 2]) orelse return null;
-        const lo = hexVal(hex[i * 2 + 1]) orelse return null;
-        out[i] = (hi << 4) | lo;
-    }
-    return out;
-}
-
-/// Convert a single hex character to its 4-bit value.
-fn hexVal(c: u8) ?u8 {
-    if (c >= '0' and c <= '9') return c - '0';
-    if (c >= 'a' and c <= 'f') return c - 'a' + 10;
-    if (c >= 'A' and c <= 'F') return c - 'A' + 10;
-    return null;
-}
-
-/// Constant-time comparison of two 32-byte arrays.
-/// Always examines all bytes regardless of where a mismatch occurs.
-fn constantTimeEql(a: *const [32]u8, b: *const [32]u8) bool {
-    var diff: u8 = 0;
-    for (a, b) |ab, bb| {
-        diff |= ab ^ bb;
-    }
-    return diff == 0;
-}
-
-// ── JSON Helpers ────────────────────────────────────────────────
-
-/// Escape a string for safe embedding inside a JSON string value.
-/// Handles: \ → \\, " → \", control chars (0x00-0x1F) → \uXXXX,
-/// newlines → \n, tabs → \t, carriage returns → \r.
-pub fn jsonEscapeInto(writer: anytype, input: []const u8) !void {
-    for (input) |c| {
-        switch (c) {
-            '"' => try writer.writeAll("\\\""),
-            '\\' => try writer.writeAll("\\\\"),
-            '\n' => try writer.writeAll("\\n"),
-            '\r' => try writer.writeAll("\\r"),
-            '\t' => try writer.writeAll("\\t"),
-            0x08 => try writer.writeAll("\\b"),
-            0x0C => try writer.writeAll("\\f"),
-            else => {
-                if (c < 0x20) {
-                    try writer.print("\\u{x:0>4}", .{c});
-                } else {
-                    try writer.writeByte(c);
-                }
-            },
-        }
-    }
-}
-
-/// Wrap a value as a JSON string field: `"key":"escaped_value"`.
-/// Returns an owned slice allocated with the provided allocator.
-pub fn jsonWrapField(allocator: std.mem.Allocator, key: []const u8, value: []const u8) ![]u8 {
-    var buf: std.ArrayListUnmanaged(u8) = .empty;
-    errdefer buf.deinit(allocator);
-    const w = buf.writer(allocator);
-    try w.writeByte('"');
-    try w.writeAll(key);
-    try w.writeAll("\":\"");
-    try jsonEscapeInto(w, value);
-    try w.writeByte('"');
-    return buf.toOwnedSlice(allocator);
-}
-
-/// Build a JSON response object: `{"status":"ok","response":"<escaped>"}`.
-/// Returns an owned slice. Caller must free.
-pub fn jsonWrapResponse(allocator: std.mem.Allocator, response: []const u8) ![]u8 {
-    var buf: std.ArrayListUnmanaged(u8) = .empty;
-    errdefer buf.deinit(allocator);
-    const w = buf.writer(allocator);
-    try w.writeAll("{\"status\":\"ok\",\"response\":\"");
-    try jsonEscapeInto(w, response);
-    try w.writeAll("\"}");
-    return buf.toOwnedSlice(allocator);
-}
-
-/// Build a JSON challenge response: `{"challenge":"<escaped>"}`.
-/// Returns an owned slice. Caller must free.
-fn jsonWrapChallenge(allocator: std.mem.Allocator, challenge: []const u8) ![]u8 {
-    var buf: std.ArrayListUnmanaged(u8) = .empty;
-    errdefer buf.deinit(allocator);
-    const w = buf.writer(allocator);
-    try w.writeAll("{\"challenge\":\"");
-    try jsonEscapeInto(w, challenge);
-    try w.writeAll("\"}");
-    return buf.toOwnedSlice(allocator);
-}
-
-/// Extract a string field from a JSON blob (minimal parser, no allocations).
-pub fn jsonStringField(json: []const u8, key: []const u8) ?[]const u8 {
-    var needle_buf: [256]u8 = undefined;
-    const quoted_key = std.fmt.bufPrint(&needle_buf, "\"{s}\"", .{key}) catch return null;
-
-    const key_pos = std.mem.indexOf(u8, json, quoted_key) orelse return null;
-    const after_key = json[key_pos + quoted_key.len ..];
-
-    // Skip whitespace and colon
-    var i: usize = 0;
-    while (i < after_key.len and (after_key[i] == ' ' or after_key[i] == ':' or
-        after_key[i] == '\t' or after_key[i] == '\n' or after_key[i] == '\r')) : (i += 1)
-    {}
-
-    if (i >= after_key.len or after_key[i] != '"') return null;
-    i += 1; // skip opening quote
-
-    // Find closing quote (handle escaped quotes)
-    const start = i;
-    while (i < after_key.len) : (i += 1) {
-        if (after_key[i] == '\\' and i + 1 < after_key.len) {
-            i += 1;
-            continue;
-        }
-        if (after_key[i] == '"') {
-            return after_key[start..i];
-        }
-    }
-    return null;
-}
-
-/// Extract an integer field from a JSON blob.
-pub fn jsonIntField(json: []const u8, key: []const u8) ?i64 {
-    var needle_buf: [256]u8 = undefined;
-    const quoted_key = std.fmt.bufPrint(&needle_buf, "\"{s}\"", .{key}) catch return null;
-
-    const key_pos = std.mem.indexOf(u8, json, quoted_key) orelse return null;
-    const after_key = json[key_pos + quoted_key.len ..];
-
-    // Skip whitespace and colon
-    var i: usize = 0;
-    while (i < after_key.len and (after_key[i] == ' ' or after_key[i] == ':' or
-        after_key[i] == '\t' or after_key[i] == '\n' or after_key[i] == '\r')) : (i += 1)
-    {}
-
-    if (i >= after_key.len) return null;
-
-    // Parse integer (possibly negative)
-    const is_negative = after_key[i] == '-';
-    if (is_negative) i += 1;
-    if (i >= after_key.len or after_key[i] < '0' or after_key[i] > '9') return null;
-
-    var result: i64 = 0;
-    while (i < after_key.len and after_key[i] >= '0' and after_key[i] <= '9') : (i += 1) {
-        result = result * 10 + @as(i64, after_key[i] - '0');
-    }
-    return if (is_negative) -result else result;
-}
 
 fn findWhatsAppConfigByVerifyToken(cfg: *const Config, verify_token: []const u8) ?*const config_types.WhatsAppConfig {
     for (cfg.channels.whatsapp) |*wa_cfg| {
@@ -788,46 +312,6 @@ fn hasSlackHttpEndpoint(cfg_opt: ?*const Config, base_path: []const u8) bool {
         if (std.mem.eql(u8, normalizeSlackWebhookPath(slack_cfg.webhook_path), base_path)) return true;
     }
     return false;
-}
-
-fn verifySlackSignature(
-    allocator: std.mem.Allocator,
-    body: []const u8,
-    timestamp_header: []const u8,
-    signature_header: []const u8,
-    signing_secret: []const u8,
-) bool {
-    if (signing_secret.len == 0) return false;
-    const ts_trimmed = std.mem.trim(u8, timestamp_header, " \t\r\n");
-    const sig_trimmed = std.mem.trim(u8, signature_header, " \t\r\n");
-    if (!std.mem.startsWith(u8, sig_trimmed, "v0=")) return false;
-
-    const provided_hex = sig_trimmed["v0=".len..];
-    if (provided_hex.len != 64) return false;
-
-    const ts = std.fmt.parseInt(i64, ts_trimmed, 10) catch return false;
-    const now = std.time.timestamp();
-    const delta = if (now >= ts) now - ts else ts - now;
-    if (delta > 300) return false; // 5-minute replay window
-
-    var base_buf: std.ArrayListUnmanaged(u8) = .empty;
-    defer base_buf.deinit(allocator);
-    const bw = base_buf.writer(allocator);
-    bw.print("v0:{s}:", .{ts_trimmed}) catch return false;
-    bw.writeAll(body) catch return false;
-
-    const HmacSha256 = std.crypto.auth.hmac.sha2.HmacSha256;
-    var mac: [32]u8 = undefined;
-    HmacSha256.create(&mac, base_buf.items, signing_secret);
-
-    var provided: [32]u8 = undefined;
-    var i: usize = 0;
-    while (i < 32) : (i += 1) {
-        const hi = hexVal(provided_hex[i * 2]) orelse return false;
-        const lo = hexVal(provided_hex[i * 2 + 1]) orelse return false;
-        provided[i] = (hi << 4) | lo;
-    }
-    return constantTimeEql(&mac, &provided);
 }
 
 fn findSlackConfigForRequest(
@@ -2113,6 +1597,7 @@ pub fn run(allocator: std.mem.Allocator, host: []const u8, port: u16, config_ptr
         state.rate_limiter = GatewayRateLimiter.init(
             cfg.gateway.pair_rate_limit_per_minute,
             cfg.gateway.webhook_rate_limit_per_minute,
+            RATE_LIMIT_WINDOW_SECS,
         );
         state.idempotency = IdempotencyStore.init(cfg.gateway.idempotency_ttl_secs);
         state.pairing_guard = try PairingGuard.init(
@@ -2469,7 +1954,7 @@ test "rate limiter different keys are independent" {
 }
 
 test "gateway rate limiter blocks after limit" {
-    var limiter = GatewayRateLimiter.init(2, 2);
+    var limiter = GatewayRateLimiter.init(2, 2, 60);
     defer limiter.deinit(std.testing.allocator);
 
     try std.testing.expect(limiter.allowPair(std.testing.allocator, "127.0.0.1"));
@@ -2530,7 +2015,7 @@ test "rate limiter high limit" {
 }
 
 test "gateway rate limiter pair and webhook independent" {
-    var limiter = GatewayRateLimiter.init(1, 1);
+    var limiter = GatewayRateLimiter.init(1, 1, 60);
     defer limiter.deinit(std.testing.allocator);
 
     try std.testing.expect(limiter.allowPair(std.testing.allocator, "ip"));
@@ -2541,7 +2026,7 @@ test "gateway rate limiter pair and webhook independent" {
 }
 
 test "gateway rate limiter zero limits always allow" {
-    var limiter = GatewayRateLimiter.init(0, 0);
+    var limiter = GatewayRateLimiter.init(0, 0, 60);
     defer limiter.deinit(std.testing.allocator);
 
     for (0..50) |_| {
