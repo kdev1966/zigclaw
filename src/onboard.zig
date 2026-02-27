@@ -1,4 +1,4 @@
-//! Onboarding — interactive setup wizard and quick setup for nullclaw.
+//! Onboarding — interactive setup wizard and quick setup for zigclaw.
 //!
 //! Mirrors ZeroClaw's onboard module:
 //!   - Interactive wizard (9-step configuration flow)
@@ -34,7 +34,7 @@ const BANNER =
     \\
 ;
 
-const WORKSPACE_STATE_DIR = ".nullclaw";
+const WORKSPACE_STATE_DIR = ".zigclaw";
 const WORKSPACE_STATE_FILE = "workspace-state.json";
 const WORKSPACE_STATE_VERSION: i64 = 1;
 
@@ -62,7 +62,7 @@ const WORKSPACE_BOOTSTRAP_TEMPLATE = @embedFile("workspace_templates/BOOTSTRAP.m
 pub const ProjectContext = struct {
     user_name: []const u8 = "User",
     timezone: []const u8 = "UTC",
-    agent_name: []const u8 = "nullclaw",
+    agent_name: []const u8 = "zigclaw",
     communication_style: []const u8 = "Be warm, natural, and clear. Avoid robotic phrasing.",
 };
 
@@ -285,7 +285,7 @@ fn dupeFallbackModels(allocator: std.mem.Allocator, provider: []const u8) ![][]c
 
 /// Fetch available model IDs for a provider (with caching, limit, and fallback).
 ///
-/// Uses file-based cache at `~/.nullclaw/state/models_cache.json` with 12h TTL.
+/// Uses file-based cache at `~/.zigclaw/state/models_cache.json` with 12h TTL.
 /// Returns at most 20 model IDs. Caller ALWAYS owns the returned slice and strings.
 /// Free with: for (models) |m| allocator.free(m); allocator.free(models);
 pub fn fetchModels(allocator: std.mem.Allocator, provider: []const u8, api_key: ?[]const u8) ![][]const u8 {
@@ -293,7 +293,7 @@ pub fn fetchModels(allocator: std.mem.Allocator, provider: []const u8, api_key: 
         return dupeFallbackModels(allocator, provider);
     defer allocator.free(home);
 
-    const state_dir = try std.fs.path.join(allocator, &.{ home, ".nullclaw", "state" });
+    const state_dir = try std.fs.path.join(allocator, &.{ home, ".zigclaw", "state" });
     defer allocator.free(state_dir);
 
     // Ensure state directory exists
@@ -621,12 +621,12 @@ pub fn runQuickSetup(allocator: std.mem.Allocator, api_key: ?[]const u8, provide
     if (cfg.defaultProviderKey() == null) {
         const env_hint = providerEnvVar(cfg.default_provider);
         try stdout.print("    1. Set your API key:  export {s}=\"sk-...\"\n", .{env_hint});
-        try stdout.writeAll("    2. Chat:              nullclaw agent -m \"Hello!\"\n");
-        try stdout.writeAll("    3. Gateway:           nullclaw gateway\n");
+        try stdout.writeAll("    2. Chat:              zigclaw agent -m \"Hello!\"\n");
+        try stdout.writeAll("    3. Gateway:           zigclaw gateway\n");
     } else {
-        try stdout.writeAll("    1. Chat:     nullclaw agent -m \"Hello!\"\n");
-        try stdout.writeAll("    2. Gateway:  nullclaw gateway\n");
-        try stdout.writeAll("    3. Status:   nullclaw status\n");
+        try stdout.writeAll("    1. Chat:     zigclaw agent -m \"Hello!\"\n");
+        try stdout.writeAll("    2. Gateway:  zigclaw gateway\n");
+        try stdout.writeAll("    3. Status:   zigclaw status\n");
     }
     try stdout.writeAll("\n");
     try stdout.flush();
@@ -646,7 +646,7 @@ pub fn runChannelsOnly(allocator: std.mem.Allocator) !void {
     resetStdinLineReader();
 
     var cfg = Config.load(allocator) catch {
-        try stdout.writeAll("No existing config found. Run `nullclaw onboard` first.\n");
+        try stdout.writeAll("No existing config found. Run `zigclaw onboard` first.\n");
         try stdout.flush();
         return error.ConfigNotFound;
     };
@@ -1160,7 +1160,7 @@ pub fn runWizard(allocator: std.mem.Allocator) !void {
     const out = &bw.interface;
     resetStdinLineReader();
     try out.writeAll(BANNER);
-    try out.writeAll("  Welcome to nullclaw -- the fastest, smallest AI assistant.\n");
+    try out.writeAll("  Welcome to zigclaw -- the fastest, smallest AI assistant.\n");
     try out.writeAll("  This wizard will configure your agent.\n\n");
     try out.flush();
 
@@ -1374,12 +1374,12 @@ pub fn runWizard(allocator: std.mem.Allocator) !void {
     try out.writeAll("\n  Next steps:\n");
     if (cfg.defaultProviderKey() == null) {
         try out.print("    1. Set your API key:  export {s}=\"sk-...\"\n", .{env_hint});
-        try out.writeAll("    2. Chat:              nullclaw agent -m \"Hello!\"\n");
-        try out.writeAll("    3. Gateway:           nullclaw gateway\n");
+        try out.writeAll("    2. Chat:              zigclaw agent -m \"Hello!\"\n");
+        try out.writeAll("    3. Gateway:           zigclaw gateway\n");
     } else {
-        try out.writeAll("    1. Chat:     nullclaw agent -m \"Hello!\"\n");
-        try out.writeAll("    2. Gateway:  nullclaw gateway\n");
-        try out.writeAll("    3. Status:   nullclaw status\n");
+        try out.writeAll("    1. Chat:     zigclaw agent -m \"Hello!\"\n");
+        try out.writeAll("    2. Gateway:  zigclaw gateway\n");
+        try out.writeAll("    3. Status:   zigclaw status\n");
     }
     try out.writeAll("\n");
     try out.flush();
@@ -1400,7 +1400,7 @@ const catalog_providers = [_]ModelsCatalogProvider{
 };
 
 /// Refresh the model catalog by fetching available models from known providers.
-/// Saves results to ~/.nullclaw/models_cache.json.
+/// Saves results to ~/.zigclaw/models_cache.json.
 pub fn runModelsRefresh(allocator: std.mem.Allocator) !void {
     var stdout_buf: [4096]u8 = undefined;
     var bw = std.fs.File.stdout().writer(&stdout_buf);
@@ -1415,9 +1415,9 @@ pub fn runModelsRefresh(allocator: std.mem.Allocator) !void {
         return;
     };
     defer allocator.free(home);
-    const cache_path = try std.fs.path.join(allocator, &.{ home, ".nullclaw", "models_cache.json" });
+    const cache_path = try std.fs.path.join(allocator, &.{ home, ".zigclaw", "models_cache.json" });
     defer allocator.free(cache_path);
-    const cache_dir = try std.fs.path.join(allocator, &.{ home, ".nullclaw" });
+    const cache_dir = try std.fs.path.join(allocator, &.{ home, ".zigclaw" });
     defer allocator.free(cache_dir);
 
     // Ensure directory exists
@@ -1897,13 +1897,13 @@ pub fn defaultBackendKey() []const u8 {
 fn getDefaultWorkspace(allocator: std.mem.Allocator) ![]const u8 {
     const home = try platform.getHomeDir(allocator);
     defer allocator.free(home);
-    return std.fs.path.join(allocator, &.{ home, ".nullclaw", "workspace" });
+    return std.fs.path.join(allocator, &.{ home, ".zigclaw", "workspace" });
 }
 
 fn getDefaultConfigPath(allocator: std.mem.Allocator) ![]const u8 {
     const home = try platform.getHomeDir(allocator);
     defer allocator.free(home);
-    return std.fs.path.join(allocator, &.{ home, ".nullclaw", "config.json" });
+    return std.fs.path.join(allocator, &.{ home, ".zigclaw", "config.json" });
 }
 
 // ── Tests ────────────────────────────────────────────────────────
@@ -2283,7 +2283,7 @@ test "ProjectContext default values" {
     const ctx = ProjectContext{};
     try std.testing.expectEqualStrings("User", ctx.user_name);
     try std.testing.expectEqualStrings("UTC", ctx.timezone);
-    try std.testing.expectEqualStrings("nullclaw", ctx.agent_name);
+    try std.testing.expectEqualStrings("zigclaw", ctx.agent_name);
     try std.testing.expect(ctx.communication_style.len > 0);
 }
 
@@ -2322,7 +2322,7 @@ test "scaffoldWorkspace creates memory subdirectory" {
     d.close();
 }
 
-test "BANNER is non-empty and contains nullclaw branding" {
+test "BANNER is non-empty and contains zigclaw branding" {
     try std.testing.expect(BANNER.len > 100);
     try std.testing.expect(std.mem.indexOf(u8, BANNER, "Zig") != null or std.mem.indexOf(u8, BANNER, "smallest") != null);
 }

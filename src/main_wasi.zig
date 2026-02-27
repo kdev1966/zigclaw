@@ -9,7 +9,7 @@ const DEFAULT_WORKSPACE = ".";
 
 const IDENTITY_TEMPLATE =
     \\# IDENTITY.md
-    \\Name: NullClaw WASI
+    \\Name: ZigClaw WASI
     \\Role: Local assistant running in WASM/WASI.
     \\Style: concise, direct, practical.
     \\
@@ -27,7 +27,7 @@ const USER_TEMPLATE =
 const MEMORY_TEMPLATE =
     \\# MEMORY.md
     \\- **workspace**: Initialized in WASI mode.
-    \\- **notes**: Add durable facts with `nullclaw memory add <key> <content>`.
+    \\- **notes**: Add durable facts with `zigclaw memory add <key> <content>`.
     \\
 ;
 
@@ -90,15 +90,15 @@ fn print_err(comptime fmt: []const u8, args: anytype) !void {
 
 fn print_usage() !void {
     try print_out(
-        \\nullclaw {s} (WASI)
+        \\zigclaw {s} (WASI)
         \\Usage:
-        \\  nullclaw version
-        \\  nullclaw help
-        \\  nullclaw onboard [--workspace PATH]
-        \\  nullclaw status [--workspace PATH]
-        \\  nullclaw identity <show|set TEXT...> [--workspace PATH]
-        \\  nullclaw memory <add|list|search|clear> [...] [--workspace PATH]
-        \\  nullclaw agent -m "message" [--workspace PATH]
+        \\  zigclaw version
+        \\  zigclaw help
+        \\  zigclaw onboard [--workspace PATH]
+        \\  zigclaw status [--workspace PATH]
+        \\  zigclaw identity <show|set TEXT...> [--workspace PATH]
+        \\  zigclaw memory <add|list|search|clear> [...] [--workspace PATH]
+        \\  zigclaw agent -m "message" [--workspace PATH]
         \\
         \\OpenClaw-like WASI mode:
         \\  - workspace/IDENTITY.md
@@ -336,7 +336,7 @@ fn extract_agent_name(identity_text: ?[]const u8) []const u8 {
             }
         }
     }
-    return "NullClaw WASI";
+    return "ZigClaw WASI";
 }
 
 fn join_tokens(allocator: std.mem.Allocator, tokens: []const []const u8) ![]u8 {
@@ -364,7 +364,7 @@ fn join_tokens(allocator: std.mem.Allocator, tokens: []const []const u8) ![]u8 {
 fn run_onboard(allocator: std.mem.Allocator, args: []const []const u8) !void {
     const parsed = try parse_workspace_args(allocator, args);
     if (parsed.positionals.len != 0) {
-        try print_err("Usage: nullclaw onboard [--workspace PATH]\n", .{});
+        try print_err("Usage: zigclaw onboard [--workspace PATH]\n", .{});
         return error.InvalidUsage;
     }
 
@@ -376,7 +376,7 @@ fn run_onboard(allocator: std.mem.Allocator, args: []const []const u8) !void {
 fn run_status(allocator: std.mem.Allocator, args: []const []const u8) !void {
     const parsed = try parse_workspace_args(allocator, args);
     if (parsed.positionals.len != 0) {
-        try print_err("Usage: nullclaw status [--workspace PATH]\n", .{});
+        try print_err("Usage: zigclaw status [--workspace PATH]\n", .{});
         return error.InvalidUsage;
     }
 
@@ -395,7 +395,7 @@ fn run_status(allocator: std.mem.Allocator, args: []const []const u8) !void {
         }
     }
 
-    try print_out("nullclaw WASI status\n", .{});
+    try print_out("zigclaw WASI status\n", .{});
     try print_out("workspace: {s}\n", .{parsed.workspace});
     try print_out("identity: {s}\n", .{if (identity_exists) "ok" else "missing"});
     try print_out("user: {s}\n", .{if (user_exists) "ok" else "missing"});
@@ -406,7 +406,7 @@ fn run_status(allocator: std.mem.Allocator, args: []const []const u8) !void {
 fn run_identity(allocator: std.mem.Allocator, args: []const []const u8) !void {
     const parsed = try parse_workspace_args(allocator, args);
     if (parsed.positionals.len < 1) {
-        try print_err("Usage: nullclaw identity <show|set TEXT...> [--workspace PATH]\n", .{});
+        try print_err("Usage: zigclaw identity <show|set TEXT...> [--workspace PATH]\n", .{});
         return error.InvalidUsage;
     }
 
@@ -422,7 +422,7 @@ fn run_identity(allocator: std.mem.Allocator, args: []const []const u8) !void {
 
     if (std.mem.eql(u8, subcmd, "set")) {
         if (parsed.positionals.len < 2) {
-            try print_err("Usage: nullclaw identity set TEXT... [--workspace PATH]\n", .{});
+            try print_err("Usage: zigclaw identity set TEXT... [--workspace PATH]\n", .{});
             return error.InvalidUsage;
         }
         const text = try join_tokens(allocator, parsed.positionals[1..]);
@@ -438,7 +438,7 @@ fn run_identity(allocator: std.mem.Allocator, args: []const []const u8) !void {
 fn run_memory(allocator: std.mem.Allocator, args: []const []const u8) !void {
     const parsed = try parse_workspace_args(allocator, args);
     if (parsed.positionals.len < 1) {
-        try print_err("Usage: nullclaw memory <add|list|search|clear> ... [--workspace PATH]\n", .{});
+        try print_err("Usage: zigclaw memory <add|list|search|clear> ... [--workspace PATH]\n", .{});
         return error.InvalidUsage;
     }
 
@@ -448,7 +448,7 @@ fn run_memory(allocator: std.mem.Allocator, args: []const []const u8) !void {
     const subcmd = parsed.positionals[0];
     if (std.mem.eql(u8, subcmd, "add")) {
         if (parsed.positionals.len < 3) {
-            try print_err("Usage: nullclaw memory add <key> <content...> [--workspace PATH]\n", .{});
+            try print_err("Usage: zigclaw memory add <key> <content...> [--workspace PATH]\n", .{});
             return error.InvalidUsage;
         }
         const key = parsed.positionals[1];
@@ -476,7 +476,7 @@ fn run_memory(allocator: std.mem.Allocator, args: []const []const u8) !void {
 
     if (std.mem.eql(u8, subcmd, "search")) {
         if (parsed.positionals.len < 2) {
-            try print_err("Usage: nullclaw memory search <query...> [--workspace PATH]\n", .{});
+            try print_err("Usage: zigclaw memory search <query...> [--workspace PATH]\n", .{});
             return error.InvalidUsage;
         }
         const query = try join_tokens(allocator, parsed.positionals[1..]);
@@ -506,11 +506,11 @@ fn run_memory(allocator: std.mem.Allocator, args: []const []const u8) !void {
 fn run_agent(allocator: std.mem.Allocator, args: []const []const u8) !void {
     const parsed = try parse_workspace_args(allocator, args);
     if (parsed.positionals.len < 2) {
-        try print_err("Usage: nullclaw agent -m \"message\" [--workspace PATH]\n", .{});
+        try print_err("Usage: zigclaw agent -m \"message\" [--workspace PATH]\n", .{});
         return error.InvalidUsage;
     }
     if (!std.mem.eql(u8, parsed.positionals[0], "-m") and !std.mem.eql(u8, parsed.positionals[0], "--message")) {
-        try print_err("Usage: nullclaw agent -m \"message\" [--workspace PATH]\n", .{});
+        try print_err("Usage: zigclaw agent -m \"message\" [--workspace PATH]\n", .{});
         return error.InvalidUsage;
     }
 
@@ -572,7 +572,7 @@ pub fn main() !void {
     const sub_args = args[2..];
     const result = switch (cmd) {
         .help => print_usage(),
-        .version => print_out("nullclaw {s}\n", .{build_options.version}),
+        .version => print_out("zigclaw {s}\n", .{build_options.version}),
         .onboard => run_onboard(allocator, sub_args),
         .status => run_status(allocator, sub_args),
         .identity => run_identity(allocator, sub_args),

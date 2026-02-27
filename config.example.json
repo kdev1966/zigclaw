@@ -1,6 +1,4 @@
 {
-  "default_temperature": 0.7,
-
   "models": {
     "providers": {
       "openrouter": {
@@ -13,7 +11,8 @@
     "defaults": {
       "model": {
         "primary": "openrouter/anthropic/claude-sonnet-4"
-      }
+      },
+      "temperature": 0.7
     }
   },
 
@@ -46,7 +45,7 @@
         "sidecar_path": "",
         "qdrant_url": "",
         "qdrant_api_key": "",
-        "qdrant_collection": "nullclaw_memories",
+        "qdrant_collection": "zigclaw_memories",
         "pgvector_table": "memory_embeddings"
       },
       "chunking": {
@@ -130,7 +129,7 @@
     },
 
     "postgres": {
-      "url": "postgresql://user:pass@localhost:5432/nullclaw",
+      "url": "postgresql://user:pass@localhost:5432/zigclaw",
       "schema": "public",
       "table": "memories",
       "connect_timeout_secs": 30
@@ -141,7 +140,7 @@
       "port": 6379,
       "password": "",
       "db_index": 0,
-      "key_prefix": "nullclaw",
+      "key_prefix": "zigclaw",
       "ttl_seconds": 0
     },
 

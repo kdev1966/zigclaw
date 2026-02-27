@@ -3,6 +3,8 @@ const root = @import("root.zig");
 const sse = @import("sse.zig");
 const error_classify = @import("error_classify.zig");
 
+const log = std.log.scoped(.openrouter);
+
 const Provider = root.Provider;
 const ChatMessage = root.ChatMessage;
 const ChatRequest = root.ChatRequest;
@@ -23,8 +25,8 @@ pub const OpenRouterProvider = struct {
 
     const BASE_URL = "https://openrouter.ai/api/v1/chat/completions";
     const WARMUP_URL = "https://openrouter.ai/api/v1/auth/key";
-    const REFERER = "https://github.com/nullclaw/nullclaw";
-    const TITLE = "nullclaw";
+    const REFERER = "https://github.com/kdev1966/zigclaw";
+    const TITLE = "zigclaw";
 
     pub fn init(allocator: std.mem.Allocator, api_key: ?[]const u8) OpenRouterProvider {
         return .{
@@ -264,10 +266,48 @@ pub const OpenRouterProvider = struct {
         var title_hdr_buf: [128]u8 = undefined;
         const title_hdr = std.fmt.bufPrint(&title_hdr_buf, "X-Title: {s}", .{TITLE}) catch return error.OpenRouterApiError;
 
-        const resp_body = root.curlPost(allocator, BASE_URL, body, &.{ auth_hdr, referer_hdr, title_hdr }) catch return error.OpenRouterApiError;
+        const hdr_slice = &[_][]const u8{ auth_hdr, referer_hdr, title_hdr };
+        const resp_body = root.curlPost(allocator, BASE_URL, body, hdr_slice) catch return error.OpenRouterApiError;
         defer allocator.free(resp_body);
 
-        return parseTextResponse(allocator, resp_body);
+        // If system prompt rejected, retry without system message
+        if (system != null and isSystemPromptRejected(resp_body)) {
+            log.warn("model \"{s}\" rejected system prompt in chatWithHistory, retrying without system", .{model});
+
+            // Merge system content into first user message
+            var new_msgs: std.ArrayListUnmanaged(ChatMessage) = .empty;
+            defer new_msgs.deinit(allocator);
+            var first_user = false;
+            for (messages) |msg| {
+                if (msg.role == .user and !first_user) {
+                    first_user = true;
+                    const merged = try std.fmt.allocPrint(allocator, "[System instructions]: {s}\n\n{s}", .{ system.?, msg.content });
+                    defer allocator.free(merged);
+                    try new_msgs.append(allocator, .{ .role = .user, .content = merged, .tool_call_id = msg.tool_call_id });
+                } else {
+                    try new_msgs.append(allocator, msg);
+                }
+            }
+
+            const retry_msgs_json = try convertMessages(allocator, new_msgs.items, null);
+            defer allocator.free(retry_msgs_json);
+
+            const retry_body = try std.fmt.allocPrint(allocator,
+                \\{{"model":"{s}","messages":{s},"temperature":{d:.2}}}
+            , .{ model, retry_msgs_json, temperature });
+            defer allocator.free(retry_body);
+
+            const retry_resp = root.curlPost(allocator, BASE_URL, retry_body, hdr_slice) catch return error.OpenRouterApiError;
+            defer allocator.free(retry_resp);
+
+            return parseTextResponse(allocator, retry_resp);
+        }
+
+        return parseTextResponse(allocator, resp_body) catch |err| {
+            const preview_len = @min(resp_body.len, 200);
+            log.err("chatWithHistory error ({}) body: {s}", .{ err, resp_body[0..preview_len] });
+            return err;
+        };
     }
 
     /// Create a Provider interface from this OpenRouterProvider.
@@ -306,9 +346,6 @@ pub const OpenRouterProvider = struct {
         const self: *OpenRouterProvider = @ptrCast(@alignCast(ptr));
         const api_key = self.api_key orelse return error.CredentialsNotSet;
 
-        const body = try buildRequestBody(allocator, system_prompt, message, model, temperature);
-        defer allocator.free(body);
-
         var auth_hdr_buf: [512]u8 = undefined;
         const auth_hdr = std.fmt.bufPrint(&auth_hdr_buf, "Authorization: Bearer {s}", .{api_key}) catch return error.OpenRouterApiError;
 
@@ -318,10 +355,95 @@ pub const OpenRouterProvider = struct {
         var title_hdr_buf: [128]u8 = undefined;
         const title_hdr = std.fmt.bufPrint(&title_hdr_buf, "X-Title: {s}", .{TITLE}) catch return error.OpenRouterApiError;
 
-        const resp_body = root.curlPost(allocator, BASE_URL, body, &.{ auth_hdr, referer_hdr, title_hdr }) catch return error.OpenRouterApiError;
+        const headers = &[_][]const u8{ auth_hdr, referer_hdr, title_hdr };
+
+        const body = try buildRequestBody(allocator, system_prompt, message, model, temperature);
+        defer allocator.free(body);
+
+        const resp_body = root.curlPost(allocator, BASE_URL, body, headers) catch return error.OpenRouterApiError;
         defer allocator.free(resp_body);
 
-        return parseTextResponse(allocator, resp_body);
+        // If the API rejects the system prompt (e.g. "Developer instruction is not enabled"),
+        // retry with system prompt merged into the user message.
+        if (system_prompt != null and isSystemPromptRejected(resp_body)) {
+            const merged_msg = std.fmt.allocPrint(allocator, "[System instructions]: {s}\n\n{s}", .{ system_prompt.?, message }) catch return error.OpenRouterApiError;
+            defer allocator.free(merged_msg);
+
+            const retry_body = buildRequestBody(allocator, null, merged_msg, model, temperature) catch return error.OpenRouterApiError;
+            defer allocator.free(retry_body);
+
+            const retry_resp = root.curlPost(allocator, BASE_URL, retry_body, headers) catch return error.OpenRouterApiError;
+            defer allocator.free(retry_resp);
+
+            return parseTextResponse(allocator, retry_resp);
+        }
+
+        return parseTextResponse(allocator, resp_body) catch |err| {
+            const preview_len = @min(resp_body.len, 200);
+            log.err("chatWithSystem error ({}) body: {s}", .{ err, resp_body[0..preview_len] });
+            return err;
+        };
+    }
+
+    /// Detect API responses that indicate the model does not support system/developer messages.
+    fn isSystemPromptRejected(resp_body: []const u8) bool {
+        // Google AI Studio: "Developer instruction is not enabled for models/..."
+        if (std.mem.indexOf(u8, resp_body, "Developer instruction is not enabled") != null) return true;
+        // Generic: some providers return "system message is not supported"
+        if (std.mem.indexOf(u8, resp_body, "system message is not supported") != null) return true;
+        if (std.mem.indexOf(u8, resp_body, "system role is not supported") != null) return true;
+        return false;
+    }
+
+    /// Check if the messages contain a system role message.
+    fn hasSystemMessage(messages: []const ChatMessage) bool {
+        for (messages) |msg| {
+            if (msg.role == .system) return true;
+        }
+        return false;
+    }
+
+    /// Rebuild messages with system content merged into the first user message.
+    /// Returns null if there are no system messages (no rebuild needed).
+    fn rebuildWithoutSystem(allocator: std.mem.Allocator, messages: []const ChatMessage) !?[]ChatMessage {
+        // Collect system content
+        var sys_buf: std.ArrayListUnmanaged(u8) = .empty;
+        defer sys_buf.deinit(allocator);
+
+        var has_system = false;
+        for (messages) |msg| {
+            if (msg.role == .system) {
+                has_system = true;
+                if (msg.content.len > 0) {
+                    if (sys_buf.items.len > 0) try sys_buf.appendSlice(allocator, "\n");
+                    try sys_buf.appendSlice(allocator, msg.content);
+                }
+            }
+        }
+        if (!has_system) return null;
+
+        // Build new message list without system messages
+        var new_msgs: std.ArrayListUnmanaged(ChatMessage) = .empty;
+        errdefer new_msgs.deinit(allocator);
+
+        var first_user_found = false;
+        for (messages) |msg| {
+            if (msg.role == .system) continue;
+
+            if (msg.role == .user and !first_user_found and sys_buf.items.len > 0) {
+                first_user_found = true;
+                const merged = try std.fmt.allocPrint(allocator, "[System instructions]: {s}\n\n{s}", .{ sys_buf.items, msg.content });
+                try new_msgs.append(allocator, .{
+                    .role = .user,
+                    .content = merged,
+                    .tool_call_id = msg.tool_call_id,
+                });
+            } else {
+                try new_msgs.append(allocator, msg);
+            }
+        }
+
+        return try new_msgs.toOwnedSlice(allocator);
     }
 
     fn chatImpl(
@@ -334,9 +456,6 @@ pub const OpenRouterProvider = struct {
         const self: *OpenRouterProvider = @ptrCast(@alignCast(ptr));
         const api_key = self.api_key orelse return error.CredentialsNotSet;
 
-        const body = try buildChatRequestBody(allocator, request, model, temperature);
-        defer allocator.free(body);
-
         var auth_hdr_buf: [512]u8 = undefined;
         const auth_hdr = std.fmt.bufPrint(&auth_hdr_buf, "Authorization: Bearer {s}", .{api_key}) catch return error.OpenRouterApiError;
 
@@ -346,10 +465,56 @@ pub const OpenRouterProvider = struct {
         var title_hdr_buf: [128]u8 = undefined;
         const title_hdr = std.fmt.bufPrint(&title_hdr_buf, "X-Title: {s}", .{TITLE}) catch return error.OpenRouterApiError;
 
-        const resp_body = root.curlPostTimed(allocator, BASE_URL, body, &.{ auth_hdr, referer_hdr, title_hdr }, request.timeout_secs) catch return error.OpenRouterApiError;
+        const headers = &[_][]const u8{ auth_hdr, referer_hdr, title_hdr };
+
+        const body = try buildChatRequestBody(allocator, request, model, temperature);
+        defer allocator.free(body);
+
+        const resp_body = root.curlPostTimed(allocator, BASE_URL, body, headers, request.timeout_secs) catch return error.OpenRouterApiError;
         defer allocator.free(resp_body);
 
-        return parseNativeResponse(allocator, resp_body);
+        // If system prompt rejected in multi-turn, retry without system messages
+        // by merging system content into the first user message.
+        if (isSystemPromptRejected(resp_body) and hasSystemMessage(request.messages)) {
+            log.warn("model \"{s}\" rejected system prompt, retrying with merged user message", .{model});
+
+            const maybe_msgs = rebuildWithoutSystem(allocator, request.messages) catch null;
+            if (maybe_msgs) |new_msgs| {
+                defer allocator.free(new_msgs);
+                // Free the merged content we allocated for the first user message
+                defer {
+                    for (new_msgs) |msg| {
+                        if (msg.role == .user and std.mem.startsWith(u8, msg.content, "[System instructions]:")) {
+                            allocator.free(msg.content);
+                        }
+                    }
+                }
+
+                const retry_request = ChatRequest{
+                    .messages = new_msgs,
+                    .model = request.model,
+                    .temperature = request.temperature,
+                    .max_tokens = request.max_tokens,
+                    .tools = request.tools,
+                    .timeout_secs = request.timeout_secs,
+                    .reasoning_effort = request.reasoning_effort,
+                };
+
+                const retry_body = buildChatRequestBody(allocator, retry_request, model, temperature) catch return error.OpenRouterApiError;
+                defer allocator.free(retry_body);
+
+                const retry_resp = root.curlPostTimed(allocator, BASE_URL, retry_body, headers, request.timeout_secs) catch return error.OpenRouterApiError;
+                defer allocator.free(retry_resp);
+
+                return parseNativeResponse(allocator, retry_resp);
+            }
+        }
+
+        return parseNativeResponse(allocator, resp_body) catch |err| {
+            const preview_len = @min(resp_body.len, 200);
+            log.err("API error ({}) body: {s}", .{ err, resp_body[0..preview_len] });
+            return err;
+        };
     }
 
     fn supportsNativeToolsImpl(_: *anyopaque) bool {
@@ -776,3 +941,67 @@ test "streamChatImpl fails without key" {
 }
 
 fn testCallback(_: *anyopaque, _: root.StreamChunk) void {}
+
+test "isSystemPromptRejected detects Gemma error" {
+    const gemma_err =
+        \\{"error":{"message":"Provider returned error","code":400,"metadata":{"raw":"{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Developer instruction is not enabled for models/gemma-3-27b-it\",\n    \"status\": \"INVALID_ARGUMENT\"\n  }\n}\n","provider_name":"Google AI Studio"}}}
+    ;
+    try std.testing.expect(OpenRouterProvider.isSystemPromptRejected(gemma_err));
+}
+
+test "isSystemPromptRejected returns false for normal error" {
+    const normal_err =
+        \\{"error":{"message":"Rate limit exceeded","code":429}}
+    ;
+    try std.testing.expect(!OpenRouterProvider.isSystemPromptRejected(normal_err));
+}
+
+test "isSystemPromptRejected returns false for success response" {
+    const success =
+        \\{"choices":[{"message":{"content":"Hello!"}}]}
+    ;
+    try std.testing.expect(!OpenRouterProvider.isSystemPromptRejected(success));
+}
+
+test "hasSystemMessage detects system role" {
+    const msgs_with_system = [_]ChatMessage{
+        .{ .role = .system, .content = "Be helpful" },
+        .{ .role = .user, .content = "Hi" },
+    };
+    try std.testing.expect(OpenRouterProvider.hasSystemMessage(&msgs_with_system));
+
+    const msgs_without_system = [_]ChatMessage{
+        .{ .role = .user, .content = "Hi" },
+    };
+    try std.testing.expect(!OpenRouterProvider.hasSystemMessage(&msgs_without_system));
+}
+
+test "rebuildWithoutSystem merges system into first user message" {
+    const alloc = std.testing.allocator;
+    const msgs = [_]ChatMessage{
+        .{ .role = .system, .content = "Be helpful" },
+        .{ .role = .user, .content = "Hello" },
+        .{ .role = .assistant, .content = "Hi" },
+    };
+    const result = try OpenRouterProvider.rebuildWithoutSystem(alloc, &msgs);
+    try std.testing.expect(result != null);
+    const new_msgs = result.?;
+    defer alloc.free(new_msgs);
+    defer alloc.free(new_msgs[0].content); // the merged content
+
+    try std.testing.expect(new_msgs.len == 2);
+    try std.testing.expect(new_msgs[0].role == .user);
+    try std.testing.expect(std.mem.startsWith(u8, new_msgs[0].content, "[System instructions]:"));
+    try std.testing.expect(std.mem.indexOf(u8, new_msgs[0].content, "Be helpful") != null);
+    try std.testing.expect(std.mem.indexOf(u8, new_msgs[0].content, "Hello") != null);
+    try std.testing.expect(new_msgs[1].role == .assistant);
+}
+
+test "rebuildWithoutSystem returns null when no system messages" {
+    const alloc = std.testing.allocator;
+    const msgs = [_]ChatMessage{
+        .{ .role = .user, .content = "Hello" },
+    };
+    const result = try OpenRouterProvider.rebuildWithoutSystem(alloc, &msgs);
+    try std.testing.expect(result == null);
+}

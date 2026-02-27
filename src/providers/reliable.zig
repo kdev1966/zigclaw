@@ -294,6 +294,9 @@ pub const ReliableProvider = struct {
         if (isContextExhausted(err_slice)) return error.ContextLengthExceeded;
         if (isRateLimited(err_slice)) return error.RateLimited;
         if (std.mem.eql(u8, err_slice, "ProviderDoesNotSupportVision")) return error.ProviderDoesNotSupportVision;
+        if (std.mem.eql(u8, err_slice, "ApiError")) return error.ApiError;
+        if (std.mem.eql(u8, err_slice, "NoResponseContent")) return error.NoResponseContent;
+        if (std.mem.eql(u8, err_slice, "CredentialsNotSet")) return error.CredentialsNotSet;
         return error.AllProvidersFailed;
     }
 

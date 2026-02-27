@@ -1,4 +1,4 @@
-//! nullclaw — The smallest AI assistant. Zig-powered.
+//! zigclaw — The smallest AI assistant. Zig-powered.
 //!
 //! Module hierarchy mirrors ZeroClaw's Rust architecture:
 //!   agent, channels, config, cron, daemon, doctor, gateway,

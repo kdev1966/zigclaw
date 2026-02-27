@@ -11,50 +11,39 @@ COPY src/ src/
 
 RUN zig build -Doptimize=ReleaseSmall
 
-# ── Stage 2: Config Prep ─────────────────────────────────────
+# ── Stage 2: Data Directory Prep ─────────────────────────────
 FROM busybox:1.37 AS config
 
-RUN mkdir -p /nullclaw-data/.nullclaw /nullclaw-data/workspace
+RUN mkdir -p /zigclaw-data/.zigclaw /zigclaw-data/workspace
 
-RUN cat > /nullclaw-data/.nullclaw/config.json << 'EOF'
-{
-  "api_key": "",
-  "default_provider": "openrouter",
-  "default_model": "anthropic/claude-sonnet-4",
-  "default_temperature": 0.7,
-  "gateway": {
-    "port": 3000,
-    "host": "::",
-    "allow_public_bind": true
-  }
-}
-EOF
+# No config.json embedded — mount your own via docker-compose volumes.
+# See config.example.json for a template.
 
 # Default runtime runs as non-root (uid/gid 65534).
 # Keep writable ownership for HOME/workspace in safe mode.
-RUN chown -R 65534:65534 /nullclaw-data
+RUN chown -R 65534:65534 /zigclaw-data
 
 # ── Stage 3: Runtime Base (shared) ────────────────────────────
 FROM alpine:3.23 AS release-base
 
-LABEL org.opencontainers.image.source=https://github.com/nullclaw/nullclaw
+LABEL org.opencontainers.image.source=https://github.com/kdev1966/zigclaw
 
 RUN apk add --no-cache ca-certificates curl tzdata
 
-COPY --from=builder /app/zig-out/bin/nullclaw /usr/local/bin/nullclaw
-COPY --from=config /nullclaw-data /nullclaw-data
+COPY --from=builder /app/zig-out/bin/zigclaw /usr/local/bin/zigclaw
+COPY --from=config /zigclaw-data /zigclaw-data
 
-ENV NULLCLAW_WORKSPACE=/nullclaw-data/workspace
-ENV HOME=/nullclaw-data
-ENV NULLCLAW_GATEWAY_PORT=3000
+ENV ZIGCLAW_WORKSPACE=/zigclaw-data/workspace
+ENV HOME=/zigclaw-data
+ENV ZIGCLAW_GATEWAY_PORT=3000
 
-WORKDIR /nullclaw-data
+WORKDIR /zigclaw-data
 EXPOSE 3000
-ENTRYPOINT ["nullclaw"]
+ENTRYPOINT ["zigclaw"]
 CMD ["gateway", "--port", "3000", "--host", "::"]
 
 # Optional autonomous mode (explicit opt-in):
-#   docker build --target release-root -t nullclaw:root .
+#   docker build --target release-root -t zigclaw:root .
 FROM release-base AS release-root
 USER 0:0
 

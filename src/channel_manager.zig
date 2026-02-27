@@ -816,7 +816,7 @@ test "ChannelManager collectConfiguredChannels wires listener types accounts and
                 .{
                     .account_id = "irc-main",
                     .host = "irc.example.net",
-                    .nick = "nullclaw",
+                    .nick = "zigclaw",
                 },
             },
             .imessage = &[_]@import("config_types.zig").IMessageConfig{

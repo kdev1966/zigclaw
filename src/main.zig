@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const build_options = @import("build_options");
-const yc = @import("nullclaw");
+const yc = @import("zigclaw");
 
 pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_addr: ?usize) noreturn {
     _ = error_return_trace;
@@ -112,7 +112,7 @@ pub fn main() !void {
 fn printVersion() void {
     var buf: [256]u8 = undefined;
     var bw = std.fs.File.stdout().writer(&buf);
-    bw.interface.print("nullclaw {s}\n", .{yc.version.string}) catch return;
+    bw.interface.print("zigclaw {s}\n", .{yc.version.string}) catch return;
     bw.interface.flush() catch return;
 }
 
@@ -141,7 +141,7 @@ fn applyGatewayDaemonOverrides(cfg: *yc.config.Config, sub_args: []const []const
 
 fn runGateway(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
     var cfg = yc.config.Config.load(allocator) catch {
-        std.debug.print("No config found -- run `nullclaw onboard` first\n", .{});
+        std.debug.print("No config found -- run `zigclaw onboard` first\n", .{});
         std.process.exit(1);
     };
     defer cfg.deinit();
@@ -163,7 +163,7 @@ fn runGateway(allocator: std.mem.Allocator, sub_args: []const []const u8) !void 
 
 fn runService(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
     if (sub_args.len < 1) {
-        std.debug.print("Usage: nullclaw service <install|start|stop|status|uninstall>\n", .{});
+        std.debug.print("Usage: zigclaw service <install|start|stop|status|uninstall>\n", .{});
         std.process.exit(1);
     }
 
@@ -180,12 +180,12 @@ fn runService(allocator: std.mem.Allocator, sub_args: []const []const u8) !void 
             if (std.mem.eql(u8, subcmd, entry[0])) break :blk entry[1];
         }
         std.debug.print("Unknown service command: {s}\n", .{subcmd});
-        std.debug.print("Usage: nullclaw service <install|start|stop|status|uninstall>\n", .{});
+        std.debug.print("Usage: zigclaw service <install|start|stop|status|uninstall>\n", .{});
         std.process.exit(1);
     };
 
     var cfg = yc.config.Config.load(allocator) catch {
-        std.debug.print("No config found -- run `nullclaw onboard` first\n", .{});
+        std.debug.print("No config found -- run `zigclaw onboard` first\n", .{});
         std.process.exit(1);
     };
     defer cfg.deinit();
@@ -201,11 +201,11 @@ fn runService(allocator: std.mem.Allocator, sub_args: []const []const u8) !void 
             },
             error.SystemctlUnavailable => {
                 std.debug.print("`systemctl` is not available; Linux service commands require systemd user services.\n", .{});
-                std.debug.print("Run `nullclaw gateway` in the foreground or use another supervisor.\n", .{});
+                std.debug.print("Run `zigclaw gateway` in the foreground or use another supervisor.\n", .{});
             },
             error.SystemdUserUnavailable => {
                 std.debug.print("systemd user services are unavailable (`systemctl --user`).\n", .{});
-                std.debug.print("Verify with `systemctl --user status` or run `nullclaw gateway` in the foreground.\n", .{});
+                std.debug.print("Verify with `systemctl --user status` or run `zigclaw gateway` in the foreground.\n", .{});
             },
             error.CommandFailed => {
                 std.debug.print("Service command failed: {s}\n", .{subcmd});
@@ -221,7 +221,7 @@ fn runService(allocator: std.mem.Allocator, sub_args: []const []const u8) !void 
 fn runCron(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
     if (sub_args.len < 1) {
         std.debug.print(
-            \\Usage: nullclaw cron <command> [args]
+            \\Usage: zigclaw cron <command> [args]
             \\
             \\Commands:
             \\  list                          List all scheduled tasks
@@ -244,43 +244,43 @@ fn runCron(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
         try yc.cron.cliListJobs(allocator);
     } else if (std.mem.eql(u8, subcmd, "add")) {
         if (sub_args.len < 3) {
-            std.debug.print("Usage: nullclaw cron add <expression> <command>\n", .{});
+            std.debug.print("Usage: zigclaw cron add <expression> <command>\n", .{});
             std.process.exit(1);
         }
         try yc.cron.cliAddJob(allocator, sub_args[1], sub_args[2]);
     } else if (std.mem.eql(u8, subcmd, "once")) {
         if (sub_args.len < 3) {
-            std.debug.print("Usage: nullclaw cron once <delay> <command>\n", .{});
+            std.debug.print("Usage: zigclaw cron once <delay> <command>\n", .{});
             std.process.exit(1);
         }
         try yc.cron.cliAddOnce(allocator, sub_args[1], sub_args[2]);
     } else if (std.mem.eql(u8, subcmd, "remove")) {
         if (sub_args.len < 2) {
-            std.debug.print("Usage: nullclaw cron remove <id>\n", .{});
+            std.debug.print("Usage: zigclaw cron remove <id>\n", .{});
             std.process.exit(1);
         }
         try yc.cron.cliRemoveJob(allocator, sub_args[1]);
     } else if (std.mem.eql(u8, subcmd, "pause")) {
         if (sub_args.len < 2) {
-            std.debug.print("Usage: nullclaw cron pause <id>\n", .{});
+            std.debug.print("Usage: zigclaw cron pause <id>\n", .{});
             std.process.exit(1);
         }
         try yc.cron.cliPauseJob(allocator, sub_args[1]);
     } else if (std.mem.eql(u8, subcmd, "resume")) {
         if (sub_args.len < 2) {
-            std.debug.print("Usage: nullclaw cron resume <id>\n", .{});
+            std.debug.print("Usage: zigclaw cron resume <id>\n", .{});
             std.process.exit(1);
         }
         try yc.cron.cliResumeJob(allocator, sub_args[1]);
     } else if (std.mem.eql(u8, subcmd, "run")) {
         if (sub_args.len < 2) {
-            std.debug.print("Usage: nullclaw cron run <id>\n", .{});
+            std.debug.print("Usage: zigclaw cron run <id>\n", .{});
             std.process.exit(1);
         }
         try yc.cron.cliRunJob(allocator, sub_args[1]);
     } else if (std.mem.eql(u8, subcmd, "update")) {
         if (sub_args.len < 2) {
-            std.debug.print("Usage: nullclaw cron update <id> [--expression <expr>] [--command <cmd>] [--enable] [--disable]\n", .{});
+            std.debug.print("Usage: zigclaw cron update <id> [--expression <expr>] [--command <cmd>] [--enable] [--disable]\n", .{});
             std.process.exit(1);
         }
         const id = sub_args[1];
@@ -304,7 +304,7 @@ fn runCron(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
         try yc.cron.cliUpdateJob(allocator, id, expression, command, enabled);
     } else if (std.mem.eql(u8, subcmd, "runs")) {
         if (sub_args.len < 2) {
-            std.debug.print("Usage: nullclaw cron runs <id>\n", .{});
+            std.debug.print("Usage: zigclaw cron runs <id>\n", .{});
             std.process.exit(1);
         }
         try yc.cron.cliListRuns(allocator, sub_args[1]);
@@ -319,7 +319,7 @@ fn runCron(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
 fn runChannel(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
     if (sub_args.len < 1) {
         std.debug.print(
-            \\Usage: nullclaw channel <command> [args]
+            \\Usage: zigclaw channel <command> [args]
             \\
             \\Commands:
             \\  list                          List configured channels
@@ -335,7 +335,7 @@ fn runChannel(allocator: std.mem.Allocator, sub_args: []const []const u8) !void 
     const subcmd = sub_args[0];
 
     var cfg = yc.config.Config.load(allocator) catch {
-        std.debug.print("No config found -- run `nullclaw onboard` first\n", .{});
+        std.debug.print("No config found -- run `zigclaw onboard` first\n", .{});
         std.process.exit(1);
     };
     defer cfg.deinit();
@@ -359,7 +359,7 @@ fn runChannel(allocator: std.mem.Allocator, sub_args: []const []const u8) !void 
         }
     } else if (std.mem.eql(u8, subcmd, "add")) {
         if (sub_args.len < 2) {
-            std.debug.print("Usage: nullclaw channel add <type>\n", .{});
+            std.debug.print("Usage: zigclaw channel add <type>\n", .{});
             std.debug.print("Types:", .{});
             for (yc.channel_catalog.known_channels) |meta| {
                 if (meta.id == .cli) continue;
@@ -372,7 +372,7 @@ fn runChannel(allocator: std.mem.Allocator, sub_args: []const []const u8) !void 
         std.debug.print("Add a \"{s}\" object under \"channels\" with the required fields.\n", .{sub_args[1]});
     } else if (std.mem.eql(u8, subcmd, "remove")) {
         if (sub_args.len < 2) {
-            std.debug.print("Usage: nullclaw channel remove <name>\n", .{});
+            std.debug.print("Usage: zigclaw channel remove <name>\n", .{});
             std.process.exit(1);
         }
         std.debug.print("To remove the '{s}' channel, edit your config file:\n  {s}\n", .{ sub_args[1], cfg.config_path });
@@ -388,7 +388,7 @@ fn runChannel(allocator: std.mem.Allocator, sub_args: []const []const u8) !void 
 fn runSkills(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
     if (sub_args.len < 1) {
         std.debug.print(
-            \\Usage: nullclaw skills <command> [args]
+            \\Usage: zigclaw skills <command> [args]
             \\
             \\Commands:
             \\  list                          List installed skills
@@ -401,7 +401,7 @@ fn runSkills(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
     }
 
     var cfg = yc.config.Config.load(allocator) catch {
-        std.debug.print("No config found -- run `nullclaw onboard` first\n", .{});
+        std.debug.print("No config found -- run `zigclaw onboard` first\n", .{});
         std.process.exit(1);
     };
     defer cfg.deinit();
@@ -429,7 +429,7 @@ fn runSkills(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
         }
     } else if (std.mem.eql(u8, subcmd, "install")) {
         if (sub_args.len < 2) {
-            std.debug.print("Usage: nullclaw skills install <source>\n", .{});
+            std.debug.print("Usage: zigclaw skills install <source>\n", .{});
             std.process.exit(1);
         }
         yc.skills.installSkillFromPath(allocator, sub_args[1], cfg.workspace_dir) catch |err| {
@@ -439,7 +439,7 @@ fn runSkills(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
         std.debug.print("Skill installed from: {s}\n", .{sub_args[1]});
     } else if (std.mem.eql(u8, subcmd, "remove")) {
         if (sub_args.len < 2) {
-            std.debug.print("Usage: nullclaw skills remove <name>\n", .{});
+            std.debug.print("Usage: zigclaw skills remove <name>\n", .{});
             std.process.exit(1);
         }
         yc.skills.removeSkill(allocator, sub_args[1], cfg.workspace_dir) catch |err| {
@@ -449,7 +449,7 @@ fn runSkills(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
         std.debug.print("Removed skill: {s}\n", .{sub_args[1]});
     } else if (std.mem.eql(u8, subcmd, "info")) {
         if (sub_args.len < 2) {
-            std.debug.print("Usage: nullclaw skills info <name>\n", .{});
+            std.debug.print("Usage: zigclaw skills info <name>\n", .{});
             std.process.exit(1);
         }
         const skill_path = std.fmt.allocPrint(allocator, "{s}/skills/{s}", .{ cfg.workspace_dir, sub_args[1] }) catch {
@@ -487,7 +487,7 @@ fn runSkills(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
 fn runHardware(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
     if (sub_args.len < 1) {
         std.debug.print(
-            \\Usage: nullclaw hardware <command> [args]
+            \\Usage: zigclaw hardware <command> [args]
             \\
             \\Commands:
             \\  scan                          Scan for connected hardware
@@ -527,12 +527,12 @@ fn runHardware(allocator: std.mem.Allocator, sub_args: []const []const u8) !void
         }
     } else if (std.mem.eql(u8, subcmd, "flash")) {
         if (sub_args.len < 2) {
-            std.debug.print("Usage: nullclaw hardware flash <firmware_file> [--target <board>]\n", .{});
+            std.debug.print("Usage: zigclaw hardware flash <firmware_file> [--target <board>]\n", .{});
             std.process.exit(1);
         }
         std.debug.print("Flash not yet implemented. Firmware file: {s}\n", .{sub_args[1]});
     } else if (std.mem.eql(u8, subcmd, "monitor")) {
-        std.debug.print("Monitor not yet implemented. Use `nullclaw hardware scan` to discover devices first.\n", .{});
+        std.debug.print("Monitor not yet implemented. Use `zigclaw hardware scan` to discover devices first.\n", .{});
     } else {
         std.debug.print("Unknown hardware command: {s}\n", .{subcmd});
         std.process.exit(1);
@@ -544,7 +544,7 @@ fn runHardware(allocator: std.mem.Allocator, sub_args: []const []const u8) !void
 fn runMigrate(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
     if (sub_args.len < 1) {
         std.debug.print(
-            \\Usage: nullclaw migrate <source> [options]
+            \\Usage: zigclaw migrate <source> [options]
             \\
             \\Sources:
             \\  openclaw                      Import from OpenClaw workspace (+ config migration)
@@ -572,7 +572,7 @@ fn runMigrate(allocator: std.mem.Allocator, sub_args: []const []const u8) !void 
         }
 
         var cfg = yc.config.Config.load(allocator) catch {
-            std.debug.print("No config found -- run `nullclaw onboard` first\n", .{});
+            std.debug.print("No config found -- run `zigclaw onboard` first\n", .{});
             std.process.exit(1);
         };
         defer cfg.deinit();
@@ -603,7 +603,7 @@ fn runMigrate(allocator: std.mem.Allocator, sub_args: []const []const u8) !void 
 
 fn printMemoryUsage() void {
     std.debug.print(
-        \\Usage: nullclaw memory <command> [args]
+        \\Usage: zigclaw memory <command> [args]
         \\
         \\Commands:
         \\  stats                         Show resolved memory config and key counters
@@ -671,7 +671,7 @@ fn runMemory(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
     }
 
     var cfg = yc.config.Config.load(allocator) catch {
-        std.debug.print("No config found -- run `nullclaw onboard` first\n", .{});
+        std.debug.print("No config found -- run `zigclaw onboard` first\n", .{});
         std.process.exit(1);
     };
     defer cfg.deinit();
@@ -737,7 +737,7 @@ fn runMemory(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
 
     if (std.mem.eql(u8, subcmd, "forget")) {
         if (sub_args.len < 2) {
-            std.debug.print("Usage: nullclaw memory forget <key>\n", .{});
+            std.debug.print("Usage: zigclaw memory forget <key>\n", .{});
             std.process.exit(1);
         }
         const key = sub_args[1];
@@ -756,7 +756,7 @@ fn runMemory(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
 
     if (std.mem.eql(u8, subcmd, "get")) {
         if (sub_args.len < 2) {
-            std.debug.print("Usage: nullclaw memory get <key>\n", .{});
+            std.debug.print("Usage: zigclaw memory get <key>\n", .{});
             std.process.exit(1);
         }
         const key = sub_args[1];
@@ -786,7 +786,7 @@ fn runMemory(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
         while (i < sub_args.len) : (i += 1) {
             if (std.mem.eql(u8, sub_args[i], "--limit")) {
                 if (i + 1 >= sub_args.len) {
-                    std.debug.print("Usage: nullclaw memory list [--category C] [--limit N]\n", .{});
+                    std.debug.print("Usage: zigclaw memory list [--category C] [--limit N]\n", .{});
                     std.process.exit(1);
                 }
                 i += 1;
@@ -796,7 +796,7 @@ fn runMemory(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
                 };
             } else if (std.mem.eql(u8, sub_args[i], "--category")) {
                 if (i + 1 >= sub_args.len) {
-                    std.debug.print("Usage: nullclaw memory list [--category C] [--limit N]\n", .{});
+                    std.debug.print("Usage: zigclaw memory list [--category C] [--limit N]\n", .{});
                     std.process.exit(1);
                 }
                 i += 1;
@@ -832,7 +832,7 @@ fn runMemory(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
 
     if (std.mem.eql(u8, subcmd, "search")) {
         if (sub_args.len < 2) {
-            std.debug.print("Usage: nullclaw memory search <query> [--limit N]\n", .{});
+            std.debug.print("Usage: zigclaw memory search <query> [--limit N]\n", .{});
             std.process.exit(1);
         }
         const query = sub_args[1];
@@ -842,7 +842,7 @@ fn runMemory(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
         while (i < sub_args.len) : (i += 1) {
             if (std.mem.eql(u8, sub_args[i], "--limit")) {
                 if (i + 1 >= sub_args.len) {
-                    std.debug.print("Usage: nullclaw memory search <query> [--limit N]\n", .{});
+                    std.debug.print("Usage: zigclaw memory search <query> [--limit N]\n", .{});
                     std.process.exit(1);
                 }
                 i += 1;
@@ -884,7 +884,7 @@ fn runCapabilities(allocator: std.mem.Allocator, sub_args: []const []const u8) !
         if (sub_args.len == 1 and (std.mem.eql(u8, sub_args[0], "--json") or std.mem.eql(u8, sub_args[0], "json"))) {
             as_json = true;
         } else {
-            std.debug.print("Usage: nullclaw capabilities [--json]\n", .{});
+            std.debug.print("Usage: zigclaw capabilities [--json]\n", .{});
             std.process.exit(1);
         }
     }
@@ -907,7 +907,7 @@ fn runCapabilities(allocator: std.mem.Allocator, sub_args: []const []const u8) !
 fn runModels(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
     if (sub_args.len < 1) {
         std.debug.print(
-            \\Usage: nullclaw models <command>
+            \\Usage: zigclaw models <command>
             \\
             \\Commands:
             \\  list                          List available models
@@ -931,17 +931,17 @@ fn runModels(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
             std.debug.print("  Model:    {s}\n", .{c.default_model orelse "(not set)"});
             std.debug.print("  Temp:     {d:.1}\n\n", .{c.default_temperature});
         } else {
-            std.debug.print("  (no config -- run `nullclaw onboard` first)\n\n", .{});
+            std.debug.print("  (no config -- run `zigclaw onboard` first)\n\n", .{});
         }
 
         std.debug.print("Known providers and default models:\n", .{});
         for (yc.onboard.known_providers) |p| {
             std.debug.print("  {s:<12} {s:<36} {s}\n", .{ p.key, p.default_model, p.label });
         }
-        std.debug.print("\nUse `nullclaw models info <model>` for details.\n", .{});
+        std.debug.print("\nUse `zigclaw models info <model>` for details.\n", .{});
     } else if (std.mem.eql(u8, subcmd, "info")) {
         if (sub_args.len < 2) {
-            std.debug.print("Usage: nullclaw models info <model>\n", .{});
+            std.debug.print("Usage: zigclaw models info <model>\n", .{});
             std.process.exit(1);
         }
         std.debug.print("Model: {s}\n", .{sub_args[1]});
@@ -950,7 +950,7 @@ fn runModels(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
         std.debug.print("  Pricing: see provider dashboard\n", .{});
     } else if (std.mem.eql(u8, subcmd, "benchmark")) {
         std.debug.print("Running model latency benchmark...\n", .{});
-        std.debug.print("Configure a provider first (nullclaw onboard).\n", .{});
+        std.debug.print("Configure a provider first (zigclaw onboard).\n", .{});
     } else if (std.mem.eql(u8, subcmd, "refresh")) {
         try yc.onboard.runModelsRefresh(allocator);
     } else {
@@ -1034,7 +1034,7 @@ fn parseOnboardArgs(sub_args: []const []const u8) OnboardArgParseResult {
 
 fn printOnboardUsage() void {
     std.debug.print(
-        \\Usage: nullclaw onboard [--interactive | --channels-only | [--api-key KEY] [--provider PROV] [--memory MEM]]
+        \\Usage: zigclaw onboard [--interactive | --channels-only | [--api-key KEY] [--provider PROV] [--memory MEM]]
         \\
         \\Modes:
         \\  (default)         quick setup
@@ -1047,8 +1047,8 @@ fn printOnboardUsage() void {
         \\  --memory MEM      memory backend key (e.g. markdown, sqlite, memory)
         \\
         \\Examples:
-        \\  nullclaw onboard --api-key sk-... --provider openrouter
-        \\  nullclaw onboard --interactive
+        \\  zigclaw onboard --api-key sk-... --provider openrouter
+        \\  zigclaw onboard --interactive
         \\
     , .{});
 }
@@ -1134,10 +1134,10 @@ fn runOnboard(allocator: std.mem.Allocator, sub_args: []const []const u8) !void 
 }
 
 // ── Channel Start ────────────────────────────────────────────────
-// Usage: nullclaw channel start [channel]
+// Usage: zigclaw channel start [channel]
 // If a channel name is given, start that specific channel.
 // Otherwise, start the first available (Telegram first, then Signal).
-// To run all configured channels/accounts together, use `nullclaw gateway`.
+// To run all configured channels/accounts together, use `zigclaw gateway`.
 
 fn canStartFromChannelCommand(channel_id: yc.channel_catalog.ChannelId) bool {
     if (!yc.channel_catalog.isBuildEnabled(channel_id)) return false;
@@ -1250,13 +1250,13 @@ fn printNoMessagingChannelConfiguredHint() void {
 
 fn runChannelStart(allocator: std.mem.Allocator, args: []const []const u8) !void {
     if (args.len > 0 and std.mem.eql(u8, args[0], "--all")) {
-        std.debug.print("Use `nullclaw gateway` to start all configured channels/accounts.\n", .{});
+        std.debug.print("Use `zigclaw gateway` to start all configured channels/accounts.\n", .{});
         std.process.exit(1);
     }
 
     // Load config
     var config = yc.config.Config.load(allocator) catch {
-        std.debug.print("No config found -- run `nullclaw onboard` first\n", .{});
+        std.debug.print("No config found -- run `zigclaw onboard` first\n", .{});
         std.process.exit(1);
     };
     defer config.deinit();
@@ -1410,14 +1410,14 @@ fn runSignalChannel(allocator: std.mem.Allocator, args: []const []const u8, conf
     const provider_kind = yc.providers.classifyProvider(config.default_provider);
     const has_fallback_credentials = hasReliabilityCredentialFallback(allocator, config);
     if (resolved_api_key == null and provider_kind != .openai_codex_provider and !has_fallback_credentials) {
-        std.debug.print("No API key configured. Set env var or add to ~/.nullclaw/config.json:\n", .{});
+        std.debug.print("No API key configured. Set env var or add to ~/.zigclaw/config.json:\n", .{});
         std.debug.print("  \"providers\": {{ \"{s}\": {{ \"api_key\": \"...\" }} }}\n", .{config.default_provider});
         std.process.exit(1);
     }
 
     const temperature = config.default_temperature;
 
-    std.debug.print("nullclaw Signal bot starting...\n", .{});
+    std.debug.print("zigclaw Signal bot starting...\n", .{});
     config.printModelConfig();
     std.debug.print("  Temperature: {d:.1}\n", .{temperature});
     std.debug.print("  Signal URL: {s}\n", .{signal_config.http_url});
@@ -1486,7 +1486,7 @@ fn runSignalChannel(allocator: std.mem.Allocator, args: []const []const u8, conf
     defer if (mcp_tools) |mt| allocator.free(mt);
 
     // Build security policy from config
-    const security = @import("nullclaw").security.policy;
+    const security = @import("zigclaw").security.policy;
     var tracker = security.RateTracker.init(allocator, config.autonomy.max_actions_per_hour);
     defer tracker.deinit();
 
@@ -1662,7 +1662,7 @@ fn runMatrixChannel(
 
     var mx = yc.channels.matrix.MatrixChannel.initFromConfig(allocator, matrix_config);
 
-    std.debug.print("nullclaw Matrix bot starting...\n", .{});
+    std.debug.print("zigclaw Matrix bot starting...\n", .{});
     std.debug.print("  Provider: {s}\n", .{config.default_provider});
     std.debug.print("  Homeserver: {s}\n", .{mx.homeserver});
     std.debug.print("  Account ID: {s}\n", .{mx.account_id});
@@ -1734,7 +1734,7 @@ fn runTelegramChannel(allocator: std.mem.Allocator, args: []const []const u8, co
     const provider_kind = yc.providers.classifyProvider(config.default_provider);
     const has_fallback_credentials = hasReliabilityCredentialFallback(allocator, &config);
     if (resolved_api_key == null and provider_kind != .openai_codex_provider and !has_fallback_credentials) {
-        std.debug.print("No API key configured. Set env var or add to ~/.nullclaw/config.json:\n", .{});
+        std.debug.print("No API key configured. Set env var or add to ~/.zigclaw/config.json:\n", .{});
         std.debug.print("  \"providers\": {{ \"{s}\": {{ \"api_key\": \"...\" }} }}\n", .{config.default_provider});
         std.process.exit(1);
     }
@@ -1742,7 +1742,7 @@ fn runTelegramChannel(allocator: std.mem.Allocator, args: []const []const u8, co
     const model = config.default_model.?;
     const temperature = config.default_temperature;
 
-    std.debug.print("nullclaw telegram bot starting...\n", .{});
+    std.debug.print("zigclaw telegram bot starting...\n", .{});
     std.debug.print("  Provider: {s}\n", .{config.default_provider});
     std.debug.print("  Model: {s}\n", .{model});
     std.debug.print("  Temperature: {d:.1}\n", .{temperature});
@@ -1788,7 +1788,7 @@ fn runTelegramChannel(allocator: std.mem.Allocator, args: []const []const u8, co
     defer if (mcp_tools) |mt| allocator.free(mt);
 
     // Build security policy from config
-    const security = @import("nullclaw").security.policy;
+    const security = @import("zigclaw").security.policy;
     var tracker = security.RateTracker.init(allocator, config.autonomy.max_actions_per_hour);
     defer tracker.deinit();
 
@@ -1884,7 +1884,7 @@ fn runTelegramChannel(allocator: std.mem.Allocator, args: []const []const u8, co
             if (std.mem.eql(u8, trimmed_content, "/start")) {
                 var greeting_buf: [512]u8 = undefined;
                 const name = msg.first_name orelse msg.id;
-                const greeting = std.fmt.bufPrint(&greeting_buf, "Hello, {s}! I'm nullClaw.\n\nModel: {s}\nType /help for available commands.", .{ name, model }) catch "Hello! I'm nullClaw. Type /help for commands.";
+                const greeting = std.fmt.bufPrint(&greeting_buf, "Hello, {s}! I'm ZigClaw.\n\nModel: {s}\nType /help for available commands.", .{ name, model }) catch "Hello! I'm ZigClaw. Type /help for commands.";
                 tg.sendMessageWithReply(msg.sender, greeting, msg.message_id) catch |err| log.err("failed to send /start reply: {}", .{err});
                 continue;
             }
@@ -2032,7 +2032,7 @@ fn runAuth(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
             }
         } else {
             std.debug.print("openai-codex: not authenticated\n", .{});
-            std.debug.print("  Run `nullclaw auth login openai-codex` to authenticate.\n", .{});
+            std.debug.print("  Run `zigclaw auth login openai-codex` to authenticate.\n", .{});
         }
     } else if (std.mem.eql(u8, subcmd, "logout")) {
         if (auth_mod.deleteCredential(allocator, codex.CREDENTIAL_KEY) catch false) {
@@ -2060,7 +2060,7 @@ fn runUpdate(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
             opts.yes = true;
         } else {
             std.debug.print("Unknown option: {s}\n", .{sub_args[i]});
-            std.debug.print("Usage: nullclaw update [--check] [--yes]\n", .{});
+            std.debug.print("Usage: zigclaw update [--check] [--yes]\n", .{});
             std.process.exit(1);
         }
     }
@@ -2073,7 +2073,7 @@ fn runUpdate(allocator: std.mem.Allocator, sub_args: []const []const u8) !void {
 
 fn printAuthUsage() void {
     std.debug.print(
-        \\Usage: nullclaw auth <command> <provider> [options]
+        \\Usage: zigclaw auth <command> <provider> [options]
         \\
         \\Commands:
         \\  login <provider>                    Authenticate via device code flow
@@ -2085,10 +2085,10 @@ fn printAuthUsage() void {
         \\  openai-codex    ChatGPT Plus/Pro subscription (OAuth)
         \\
         \\Examples:
-        \\  nullclaw auth login openai-codex
-        \\  nullclaw auth login openai-codex --import-codex
-        \\  nullclaw auth status openai-codex
-        \\  nullclaw auth logout openai-codex
+        \\  zigclaw auth login openai-codex
+        \\  zigclaw auth login openai-codex --import-codex
+        \\  zigclaw auth status openai-codex
+        \\  zigclaw auth logout openai-codex
         \\
     , .{});
 }
@@ -2108,7 +2108,7 @@ fn runAuthDeviceCodeLogin(
     ) catch {
         std.debug.print("Failed to start device code flow (likely Cloudflare block).\n", .{});
         std.debug.print("Alternative:\n", .{});
-        std.debug.print("  nullclaw auth login openai-codex --import-codex   (import from Codex CLI)\n", .{});
+        std.debug.print("  zigclaw auth login openai-codex --import-codex   (import from Codex CLI)\n", .{});
         std.process.exit(1);
     };
     defer dc.deinit(allocator);
@@ -2254,7 +2254,7 @@ fn runAuthImportCodex(
             std.debug.print("  Token: expired (will auto-refresh)\n", .{});
         }
     }
-    std.debug.print("\nTo use: set \"agents.defaults.model.primary\": \"openai-codex/gpt-5.3-codex\" in ~/.nullclaw/config.json\n", .{});
+    std.debug.print("\nTo use: set \"agents.defaults.model.primary\": \"openai-codex/gpt-5.3-codex\" in ~/.zigclaw/config.json\n", .{});
 }
 
 /// Decode the "exp" claim from a JWT, returning the Unix timestamp or 0 if not decodable.
@@ -2308,15 +2308,15 @@ fn saveAndPrintResult(
     } else {
         std.debug.print("Authenticated successfully.\n", .{});
     }
-    std.debug.print("\nTo use: set \"agents.defaults.model.primary\": \"openai-codex/gpt-5.3-codex\" in ~/.nullclaw/config.json\n", .{});
+    std.debug.print("\nTo use: set \"agents.defaults.model.primary\": \"openai-codex/gpt-5.3-codex\" in ~/.zigclaw/config.json\n", .{});
 }
 
 fn printUsage() void {
     const usage =
-        \\nullclaw -- The smallest AI assistant. Zig-powered.
+        \\zigclaw -- The smallest AI assistant. Zig-powered.
         \\
         \\USAGE:
-        \\  nullclaw <command> [options]
+        \\  zigclaw <command> [options]
         \\
         \\COMMANDS:
         \\  onboard     Initialize workspace and configuration
@@ -2444,8 +2444,8 @@ test "parseOnboardArgs rejects positional arguments" {
 
 test "applyGatewayDaemonOverrides applies CLI port before validation" {
     var cfg = yc.config.Config{
-        .workspace_dir = "/tmp/nullclaw-test",
-        .config_path = "/tmp/nullclaw-test/config.json",
+        .workspace_dir = "/tmp/zigclaw-test",
+        .config_path = "/tmp/zigclaw-test/config.json",
         .default_model = "openrouter/auto",
         .allocator = std.testing.allocator,
     };
@@ -2460,8 +2460,8 @@ test "applyGatewayDaemonOverrides applies CLI port before validation" {
 
 test "applyGatewayDaemonOverrides applies host override" {
     var cfg = yc.config.Config{
-        .workspace_dir = "/tmp/nullclaw-test",
-        .config_path = "/tmp/nullclaw-test/config.json",
+        .workspace_dir = "/tmp/zigclaw-test",
+        .config_path = "/tmp/zigclaw-test/config.json",
         .default_model = "openrouter/auto",
         .allocator = std.testing.allocator,
     };
@@ -2472,8 +2472,8 @@ test "applyGatewayDaemonOverrides applies host override" {
 
 test "applyGatewayDaemonOverrides rejects invalid port" {
     var cfg = yc.config.Config{
-        .workspace_dir = "/tmp/nullclaw-test",
-        .config_path = "/tmp/nullclaw-test/config.json",
+        .workspace_dir = "/tmp/zigclaw-test",
+        .config_path = "/tmp/zigclaw-test/config.json",
         .default_model = "openrouter/auto",
         .allocator = std.testing.allocator,
     };
@@ -2483,8 +2483,8 @@ test "applyGatewayDaemonOverrides rejects invalid port" {
 
 test "hasConfiguredStartableChannels ignores cli and webhook-only defaults" {
     const cfg = yc.config.Config{
-        .workspace_dir = "/tmp/nullclaw-test",
-        .config_path = "/tmp/nullclaw-test/config.json",
+        .workspace_dir = "/tmp/zigclaw-test",
+        .config_path = "/tmp/zigclaw-test/config.json",
         .default_model = "openrouter/auto",
         .allocator = std.testing.allocator,
         .channels = .{
@@ -2498,8 +2498,8 @@ test "hasConfiguredStartableChannels ignores cli and webhook-only defaults" {
 
 test "hasConfiguredStartableChannels returns true when telegram configured" {
     const cfg = yc.config.Config{
-        .workspace_dir = "/tmp/nullclaw-test",
-        .config_path = "/tmp/nullclaw-test/config.json",
+        .workspace_dir = "/tmp/zigclaw-test",
+        .config_path = "/tmp/zigclaw-test/config.json",
         .default_model = "openrouter/auto",
         .allocator = std.testing.allocator,
         .channels = .{
@@ -2515,8 +2515,8 @@ test "hasConfiguredStartableChannels returns true when telegram configured" {
 
 test "hasConfiguredButBuildDisabledStartableChannels detects configured disabled channel" {
     const cfg = yc.config.Config{
-        .workspace_dir = "/tmp/nullclaw-test",
-        .config_path = "/tmp/nullclaw-test/config.json",
+        .workspace_dir = "/tmp/zigclaw-test",
+        .config_path = "/tmp/zigclaw-test/config.json",
         .default_model = "openrouter/auto",
         .allocator = std.testing.allocator,
         .channels = .{

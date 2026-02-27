@@ -57,7 +57,7 @@ pub fn getShellFlag() []const u8 {
 // ── Tests ────────────────────────────────────────────────────────
 
 test "getEnvOrNull returns null for missing var" {
-    try std.testing.expect(getEnvOrNull(std.testing.allocator, "NULLCLAW_NONEXISTENT_VAR_12345") == null);
+    try std.testing.expect(getEnvOrNull(std.testing.allocator, "ZIGCLAW_NONEXISTENT_VAR_12345") == null);
 }
 
 test "getHomeDir returns a non-empty string" {

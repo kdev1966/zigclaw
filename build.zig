@@ -342,7 +342,7 @@ pub fn build(b: *std.Build) void {
 
     // ---------- library module (importable by consumers) ----------
     const lib_mod: ?*std.Build.Module = if (is_wasi) null else blk: {
-        const module = b.addModule("nullclaw", .{
+        const module = b.addModule("zigclaw", .{
             .root_source_file = b.path("src/root.zig"),
             .target = target,
             .optimize = optimize,
@@ -361,10 +361,10 @@ pub fn build(b: *std.Build) void {
     const exe_imports: []const std.Build.Module.Import = if (is_wasi)
         &.{}
     else
-        &.{.{ .name = "nullclaw", .module = lib_mod.? }};
+        &.{.{ .name = "zigclaw", .module = lib_mod.? }};
 
     const exe = b.addExecutable(.{
-        .name = "nullclaw",
+        .name = "zigclaw",
         .root_module = b.createModule(.{
             .root_source_file = if (is_wasi) b.path("src/main_wasi.zig") else b.path("src/main.zig"),
             .target = target,
@@ -404,7 +404,7 @@ pub fn build(b: *std.Build) void {
     }
 
     // ---------- run step ----------
-    const run_step = b.step("run", "Run nullclaw");
+    const run_step = b.step("run", "Run zigclaw");
     const run_cmd = b.addRunArtifact(exe);
     run_step.dependOn(&run_cmd.step);
     run_cmd.step.dependOn(b.getInstallStep());

@@ -57,8 +57,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nullclaw-${{ matrix.target }}
-          path: zig-out/bin/nullclaw${{ matrix.ext }}
+          name: zigclaw-${{ matrix.target }}
+          path: zig-out/bin/zigclaw${{ matrix.ext }}
 
   release:
     needs: build
@@ -71,25 +71,25 @@ jobs:
 
       - name: Rename binaries
         run: |
-          mv nullclaw-linux-x86_64/nullclaw nullclaw-linux-x86_64.bin
-          mv nullclaw-linux-aarch64/nullclaw nullclaw-linux-aarch64.bin
-          mv nullclaw-linux-riscv64/nullclaw nullclaw-linux-riscv64.bin
-          mv nullclaw-macos-aarch64/nullclaw nullclaw-macos-aarch64.bin
-          mv nullclaw-macos-x86_64/nullclaw nullclaw-macos-x86_64.bin
-          mv nullclaw-windows-x86_64/nullclaw.exe nullclaw-windows-x86_64.exe
-          mv nullclaw-windows-aarch64/nullclaw.exe nullclaw-windows-aarch64.exe
+          mv zigclaw-linux-x86_64/zigclaw zigclaw-linux-x86_64.bin
+          mv zigclaw-linux-aarch64/zigclaw zigclaw-linux-aarch64.bin
+          mv zigclaw-linux-riscv64/zigclaw zigclaw-linux-riscv64.bin
+          mv zigclaw-macos-aarch64/zigclaw zigclaw-macos-aarch64.bin
+          mv zigclaw-macos-x86_64/zigclaw zigclaw-macos-x86_64.bin
+          mv zigclaw-windows-x86_64/zigclaw.exe zigclaw-windows-x86_64.exe
+          mv zigclaw-windows-aarch64/zigclaw.exe zigclaw-windows-aarch64.exe
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            nullclaw-linux-x86_64.bin
-            nullclaw-linux-aarch64.bin
-            nullclaw-linux-riscv64.bin
-            nullclaw-macos-aarch64.bin
-            nullclaw-macos-x86_64.bin
-            nullclaw-windows-x86_64.exe
-            nullclaw-windows-aarch64.exe
+            zigclaw-linux-x86_64.bin
+            zigclaw-linux-aarch64.bin
+            zigclaw-linux-riscv64.bin
+            zigclaw-macos-aarch64.bin
+            zigclaw-macos-x86_64.bin
+            zigclaw-windows-x86_64.exe
+            zigclaw-windows-aarch64.exe
           generate_release_notes: true
 
   docker:

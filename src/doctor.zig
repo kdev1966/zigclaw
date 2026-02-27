@@ -1,4 +1,4 @@
-//! Doctor -- system diagnostics for nullclaw.
+//! Doctor -- system diagnostics for zigclaw.
 //!
 //! Mirrors ZeroClaw's doctor module with severity-based diagnostics:
 //!   - DiagItem system with ok/warn/err severity levels
@@ -6,7 +6,7 @@
 //!   - Workspace integrity (writable probe, disk space, key files)
 //!   - Daemon state with proper JSON parsing
 //!   - Environment checks (git, curl, shell, home)
-//!   - Sandbox, cron status, channel connectivity (nullclaw-specific)
+//!   - Sandbox, cron status, channel connectivity (zigclaw-specific)
 
 const std = @import("std");
 const platform = @import("platform.zig");
@@ -123,13 +123,13 @@ pub fn runDoctor(
     try checkDaemonState(allocator, config, &items);
     try checkEnvironment(allocator, &items);
 
-    // nullclaw-specific extras
+    // zigclaw-specific extras
     checkSandbox(allocator, config, &items);
     try checkCronStatus(allocator, &items);
     checkChannels(allocator, config, &items);
 
     // Print grouped report
-    try writer.writeAll("nullclaw Doctor (enhanced)\n\n");
+    try writer.writeAll("zigclaw Doctor (enhanced)\n\n");
 
     var current_cat: []const u8 = "";
     var ok_count: u32 = 0;
@@ -152,7 +152,7 @@ pub fn runDoctor(
 
     try writer.print("\nSummary: {d} ok, {d} warnings, {d} errors\n", .{ ok_count, warn_count, err_count });
     if (err_count > 0) {
-        try writer.writeAll("Run 'nullclaw doctor --fix' or check your config.\n");
+        try writer.writeAll("Run 'zigclaw doctor --fix' or check your config.\n");
     }
 }
 
@@ -169,7 +169,7 @@ pub fn run(allocator: std.mem.Allocator) !void {
             Color.red ++ "[ERR]" ++ Color.reset
         else
             "[ERR]";
-        try stdout.print("{s} No config found -- run `nullclaw onboard` first\n", .{prefix});
+        try stdout.print("{s} No config found -- run `zigclaw onboard` first\n", .{prefix});
         try stdout.flush();
         return;
     };
@@ -265,7 +265,7 @@ pub fn checkConfigSemantics(
     if (has_channel) {
         try items.append(allocator, DiagItem.ok(cat, "at least one channel configured"));
     } else {
-        try items.append(allocator, DiagItem.warn(cat, "no channels configured -- run `nullclaw onboard` to set one up"));
+        try items.append(allocator, DiagItem.warn(cat, "no channels configured -- run `zigclaw onboard` to set one up"));
     }
 }
 
@@ -290,7 +290,7 @@ pub fn checkWorkspace(
     }
 
     // Writable probe
-    const probe_name = ".nullclaw_doctor_probe";
+    const probe_name = ".zigclaw_doctor_probe";
     const probe_path = try std.fs.path.join(allocator, &.{ ws, probe_name });
     defer allocator.free(probe_path);
 
@@ -597,7 +597,7 @@ pub fn truncateForDisplay(allocator: std.mem.Allocator, s: []const u8, max_len: 
     return allocator.dupe(u8, s[0..i]);
 }
 
-// ── Nullclaw-specific checks ────────────────────────────────────
+// ── Zigclaw-specific checks ────────────────────────────────────
 
 /// Check sandbox availability.
 fn checkSandbox(allocator: std.mem.Allocator, cfg: *const Config, items: *std.ArrayList(DiagItem)) void {
@@ -838,7 +838,7 @@ test "checkDaemonState handles missing file" {
     var items: std.ArrayList(DiagItem) = .empty;
 
     var cfg = testConfig();
-    cfg.config_path = "/tmp/nonexistent-nullclaw-test/config.json";
+    cfg.config_path = "/tmp/nonexistent-zigclaw-test/config.json";
 
     try checkDaemonState(allocator, &cfg, &items);
 
@@ -908,8 +908,8 @@ test "doctor module compiles" {}
 
 fn testConfig() Config {
     return Config{
-        .workspace_dir = "/tmp/nullclaw-test-workspace",
-        .config_path = "/tmp/nullclaw-test/config.json",
+        .workspace_dir = "/tmp/zigclaw-test-workspace",
+        .config_path = "/tmp/zigclaw-test/config.json",
         .allocator = std.testing.allocator,
     };
 }

@@ -279,13 +279,18 @@ pub fn parseJson(self: *Config, content: []const u8) !void {
 
     const root = parsed.value.object;
 
-    // Top-level fields
+    // Top-level fields — auto-migrate legacy keys into agents.defaults.model.primary
+    var legacy_provider: ?[]const u8 = null;
+    var legacy_model: ?[]const u8 = null;
     if (root.get("default_provider")) |v| {
-        if (v == .string) self.legacy_default_provider_detected = true;
+        if (v == .string) {
+            self.legacy_default_provider_detected = true;
+            legacy_provider = v.string;
+        }
     }
-    // Legacy key is no longer accepted. Require agents.defaults.model.primary.
-    if (root.get("default_model")) |_| {
+    if (root.get("default_model")) |v| {
         self.legacy_default_model_detected = true;
+        if (v == .string) legacy_model = v.string;
     }
     if (root.get("default_temperature")) |v| {
         if (v == .float) self.default_temperature = v.float;
@@ -436,6 +441,33 @@ pub fn parseJson(self: *Config, content: []const u8) !void {
                 }
             }
         }
+    }
+
+    // Auto-migrate legacy top-level default_provider/default_model into
+    // agents.defaults.model.primary when the new-style key was not set.
+    if (self.legacy_default_provider_detected or self.legacy_default_model_detected) {
+        const already_set = self.default_model != null and self.default_provider.len > 0;
+        if (!already_set) {
+            if (legacy_model) |lm| {
+                if (legacy_provider) |lp| {
+                    // Explicit provider given — use it directly; model keeps its full name
+                    // (e.g. provider="openrouter", model="nvidia/nemotron-3-nano-30b-a3b:free").
+                    self.default_provider = try self.allocator.dupe(u8, lp);
+                    self.default_model = try self.allocator.dupe(u8, lm);
+                } else if (splitPrimaryModelRef(lm)) |parsed_ref| {
+                    // No explicit provider but model has a slash — split it.
+                    self.default_provider = try self.allocator.dupe(u8, parsed_ref.provider);
+                    self.default_model = try self.allocator.dupe(u8, parsed_ref.model);
+                } else {
+                    self.default_provider = try self.allocator.dupe(u8, "openrouter");
+                    self.default_model = try self.allocator.dupe(u8, lm);
+                }
+                std.debug.print("Config: auto-migrated top-level default_provider/default_model to agents.defaults.model.primary=\"{s}/{s}\". Please update your config.\n", .{ self.default_provider, self.default_model.? });
+            }
+        }
+        // Clear the legacy flags so validate() no longer rejects.
+        self.legacy_default_provider_detected = false;
+        self.legacy_default_model_detected = false;
     }
 
     // Agent bindings (snake_case payload fields).

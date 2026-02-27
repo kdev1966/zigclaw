@@ -1334,8 +1334,8 @@ test "gpioRead returns result with state" {
     rpi.connected = true;
     const p = rpi.peripheral();
     if (comptime builtin.os.tag == .linux) {
-        // Only run on real RPi hardware — requires NULLCLAW_GPIO_TEST=1
-        if (platform.getEnvOrNull(std.testing.allocator, "NULLCLAW_GPIO_TEST")) |v| std.testing.allocator.free(v) else return error.SkipZigTest;
+        // Only run on real RPi hardware — requires ZIGCLAW_GPIO_TEST=1
+        if (platform.getEnvOrNull(std.testing.allocator, "ZIGCLAW_GPIO_TEST")) |v| std.testing.allocator.free(v) else return error.SkipZigTest;
         const result = try gpioRead(p, 17);
         try std.testing.expectEqual(@as(u32, 17), result.pin);
         try std.testing.expectEqualStrings("LOW", result.stateString());
@@ -1349,8 +1349,8 @@ test "gpioWrite returns success" {
     rpi.connected = true;
     const p = rpi.peripheral();
     if (comptime builtin.os.tag == .linux) {
-        // Only run on real RPi hardware — requires NULLCLAW_GPIO_TEST=1
-        if (platform.getEnvOrNull(std.testing.allocator, "NULLCLAW_GPIO_TEST")) |v| std.testing.allocator.free(v) else return error.SkipZigTest;
+        // Only run on real RPi hardware — requires ZIGCLAW_GPIO_TEST=1
+        if (platform.getEnvOrNull(std.testing.allocator, "ZIGCLAW_GPIO_TEST")) |v| std.testing.allocator.free(v) else return error.SkipZigTest;
         const result = try gpioWrite(p, 17, true);
         try std.testing.expectEqual(@as(u32, 17), result.pin);
         try std.testing.expectEqual(@as(u8, 1), result.value);

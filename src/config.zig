@@ -187,7 +187,7 @@ pub const Config = struct {
 
         const home = platform.getHomeDir(allocator) catch return error.NoHomeDir;
 
-        const config_dir = try std.fs.path.join(allocator, &.{ home, ".nullclaw" });
+        const config_dir = try std.fs.path.join(allocator, &.{ home, ".zigclaw" });
         const config_path = try std.fs.path.join(allocator, &.{ config_dir, "config.json" });
         const workspace_dir = try std.fs.path.join(allocator, &.{ config_dir, "workspace" });
 
@@ -395,20 +395,20 @@ pub const Config = struct {
         try w.print("  }},\n", .{});
     }
 
-    /// Apply NULLCLAW_* environment variable overrides.
+    /// Apply ZIGCLAW_* environment variable overrides.
     pub fn applyEnvOverrides(self: *Config) void {
         // Provider
-        if (std.process.getEnvVarOwned(self.allocator, "NULLCLAW_PROVIDER")) |prov| {
+        if (std.process.getEnvVarOwned(self.allocator, "ZIGCLAW_PROVIDER")) |prov| {
             self.default_provider = prov;
         } else |_| {}
 
         // Model
-        if (std.process.getEnvVarOwned(self.allocator, "NULLCLAW_MODEL")) |model| {
+        if (std.process.getEnvVarOwned(self.allocator, "ZIGCLAW_MODEL")) |model| {
             self.default_model = model;
         } else |_| {}
 
         // Temperature
-        if (std.process.getEnvVarOwned(self.allocator, "NULLCLAW_TEMPERATURE")) |temp_str| {
+        if (std.process.getEnvVarOwned(self.allocator, "ZIGCLAW_TEMPERATURE")) |temp_str| {
             defer self.allocator.free(temp_str);
             if (std.fmt.parseFloat(f64, temp_str)) |temp| {
                 if (temp >= 0.0 and temp <= 2.0) {
@@ -418,7 +418,7 @@ pub const Config = struct {
         } else |_| {}
 
         // Gateway port
-        if (std.process.getEnvVarOwned(self.allocator, "NULLCLAW_GATEWAY_PORT")) |port_str| {
+        if (std.process.getEnvVarOwned(self.allocator, "ZIGCLAW_GATEWAY_PORT")) |port_str| {
             defer self.allocator.free(port_str);
             if (std.fmt.parseInt(u16, port_str, 10)) |port| {
                 self.gateway.port = port;
@@ -426,17 +426,17 @@ pub const Config = struct {
         } else |_| {}
 
         // Gateway host
-        if (std.process.getEnvVarOwned(self.allocator, "NULLCLAW_GATEWAY_HOST")) |host| {
+        if (std.process.getEnvVarOwned(self.allocator, "ZIGCLAW_GATEWAY_HOST")) |host| {
             self.gateway.host = host;
         } else |_| {}
 
         // Workspace
-        if (std.process.getEnvVarOwned(self.allocator, "NULLCLAW_WORKSPACE")) |ws| {
+        if (std.process.getEnvVarOwned(self.allocator, "ZIGCLAW_WORKSPACE")) |ws| {
             self.workspace_dir = ws;
         } else |_| {}
 
         // Allow public bind
-        if (std.process.getEnvVarOwned(self.allocator, "NULLCLAW_ALLOW_PUBLIC_BIND")) |val| {
+        if (std.process.getEnvVarOwned(self.allocator, "ZIGCLAW_ALLOW_PUBLIC_BIND")) |val| {
             defer self.allocator.free(val);
             self.gateway.allow_public_bind = std.mem.eql(u8, val, "1") or std.mem.eql(u8, val, "true");
         } else |_| {}
@@ -741,7 +741,7 @@ pub const Config = struct {
                 .{},
             ),
             ValidationError.NoDefaultModel => std.debug.print(
-                "No default model configured. Set agents.defaults.model.primary in ~/.nullclaw/config.json or run `nullclaw onboard`.\n",
+                "No default model configured. Set agents.defaults.model.primary in ~/.zigclaw/config.json or run `zigclaw onboard`.\n",
                 .{},
             ),
             ValidationError.TemperatureOutOfRange => std.debug.print("Config error: temperature must be between 0.0 and 2.0.\n", .{}),
@@ -918,7 +918,7 @@ test "validation rejects null default_model" {
     try std.testing.expectError(Config.ValidationError.NoDefaultModel, cfg.validate());
 }
 
-test "validation rejects top-level default_provider" {
+test "auto-migrate top-level default_provider when nested primary exists" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -927,35 +927,57 @@ test "validation rejects top-level default_provider" {
     ;
     var cfg = Config{ .workspace_dir = "/tmp/yc", .config_path = "/tmp/yc/config.json", .allocator = allocator };
     try cfg.parseJson(json);
-    try std.testing.expect(cfg.legacy_default_provider_detected);
-    try std.testing.expectError(Config.ValidationError.LegacyDefaultProviderField, cfg.validate());
+    // Legacy flags cleared after auto-migration; nested primary takes precedence.
+    try std.testing.expect(!cfg.legacy_default_provider_detected);
+    try std.testing.expectEqualStrings("anthropic", cfg.default_provider);
+    try std.testing.expectEqualStrings("claude-opus-4", cfg.default_model.?);
+    try cfg.validate();
 }
 
-test "json parse top-level default_model" {
-    const allocator = std.testing.allocator;
+test "auto-migrate top-level default_model splits provider when no default_provider" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
     const json =
         \\{"default_model": "meta-llama/llama-3.3-70b-instruct:free"}
     ;
     var cfg = Config{ .workspace_dir = "/tmp/yc", .config_path = "/tmp/yc/config.json", .allocator = allocator };
     try cfg.parseJson(json);
-    try std.testing.expect(cfg.legacy_default_model_detected);
-    try std.testing.expect(cfg.default_model == null);
-    try std.testing.expectError(Config.ValidationError.LegacyDefaultModelField, cfg.validate());
+    // No explicit default_provider → split on slash: provider=meta-llama, model=llama-3.3-70b-instruct:free
+    try std.testing.expect(!cfg.legacy_default_model_detected);
+    try std.testing.expectEqualStrings("meta-llama", cfg.default_provider);
+    try std.testing.expectEqualStrings("llama-3.3-70b-instruct:free", cfg.default_model.?);
+    try cfg.validate();
 }
 
-test "validation rejects top-level default_model even when nested model exists" {
-    const allocator = std.testing.allocator;
-    // use an arena to match production behavior (both allocs are freed together)
-    var arena = std.heap.ArenaAllocator.init(allocator);
+test "auto-migrate top-level default_provider + default_model keeps provider" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const json =
+        \\{"default_provider": "openrouter", "default_model": "nvidia/nemotron-3-nano-30b-a3b:free"}
+    ;
+    var cfg = Config{ .workspace_dir = "/tmp/yc", .config_path = "/tmp/yc/config.json", .allocator = allocator };
+    try cfg.parseJson(json);
+    // Explicit default_provider → use it directly, model keeps full name with slash.
+    try std.testing.expect(!cfg.legacy_default_provider_detected);
+    try std.testing.expectEqualStrings("openrouter", cfg.default_provider);
+    try std.testing.expectEqualStrings("nvidia/nemotron-3-nano-30b-a3b:free", cfg.default_model.?);
+    try cfg.validate();
+}
+
+test "auto-migrate top-level default_model does not override nested primary" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
     var cfg = Config{ .workspace_dir = "/tmp/yc", .config_path = "/tmp/yc/config.json", .allocator = a };
     try cfg.parseJson(
         \\{"default_model": "top-level-model", "agents": {"defaults": {"model": {"primary": "anthropic/nested-model"}}}}
     );
-    try std.testing.expect(cfg.legacy_default_model_detected);
+    // Nested primary was already set, so auto-migration skips; flags still cleared.
+    try std.testing.expect(!cfg.legacy_default_model_detected);
     try std.testing.expectEqualStrings("nested-model", cfg.default_model.?);
-    try std.testing.expectError(Config.ValidationError.LegacyDefaultModelField, cfg.validate());
+    try cfg.validate();
 }
 
 test "validation rejects defaults.model.primary without provider prefix" {
@@ -2037,7 +2059,7 @@ test "applyEnvOverrides does not crash on default config" {
         .config_path = "/tmp/yc/config.json",
         .allocator = allocator,
     };
-    // Should not crash even when no NULLCLAW_* env vars are set
+    // Should not crash even when no ZIGCLAW_* env vars are set
     cfg.applyEnvOverrides();
     // Default values should remain intact
     try std.testing.expectEqualStrings("openrouter", cfg.default_provider);

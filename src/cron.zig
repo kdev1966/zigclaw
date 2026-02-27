@@ -880,18 +880,18 @@ const JsonCronJob = struct {
     one_shot: bool,
 };
 
-/// Get the default cron.json path: ~/.nullclaw/cron.json
+/// Get the default cron.json path: ~/.zigclaw/cron.json
 fn cronJsonPath(allocator: std.mem.Allocator) ![]const u8 {
     const home = try platform.getHomeDir(allocator);
     defer allocator.free(home);
-    return std.fs.path.join(allocator, &.{ home, ".nullclaw", "cron.json" });
+    return std.fs.path.join(allocator, &.{ home, ".zigclaw", "cron.json" });
 }
 
-/// Ensure the ~/.nullclaw directory exists.
+/// Ensure the ~/.zigclaw directory exists.
 fn ensureCronDir(allocator: std.mem.Allocator) !void {
     const home = try platform.getHomeDir(allocator);
     defer allocator.free(home);
-    const dir = try std.fs.path.join(allocator, &.{ home, ".nullclaw" });
+    const dir = try std.fs.path.join(allocator, &.{ home, ".zigclaw" });
     defer allocator.free(dir);
     std.fs.makeDirAbsolute(dir) catch |err| switch (err) {
         error.PathAlreadyExists => {},
@@ -899,7 +899,7 @@ fn ensureCronDir(allocator: std.mem.Allocator) !void {
     };
 }
 
-/// Save scheduler jobs to ~/.nullclaw/cron.json.
+/// Save scheduler jobs to ~/.zigclaw/cron.json.
 pub fn saveJobs(scheduler: *const CronScheduler) !void {
     try ensureCronDir(scheduler.allocator);
     const path = try cronJsonPath(scheduler.allocator);
@@ -950,12 +950,12 @@ pub fn saveJobs(scheduler: *const CronScheduler) !void {
     try writeFileAtomic(scheduler.allocator, path, buf.items);
 }
 
-/// Load jobs from ~/.nullclaw/cron.json into the scheduler.
+/// Load jobs from ~/.zigclaw/cron.json into the scheduler.
 pub fn loadJobs(scheduler: *CronScheduler) !void {
     try loadJobsWithPolicy(scheduler, .best_effort);
 }
 
-/// Load jobs from ~/.nullclaw/cron.json; unlike loadJobs, this returns
+/// Load jobs from ~/.zigclaw/cron.json; unlike loadJobs, this returns
 /// parse/read errors (except missing file/path).
 pub fn loadJobsStrict(scheduler: *CronScheduler) !void {
     try loadJobsWithPolicy(scheduler, .strict);
@@ -1016,8 +1016,8 @@ pub fn cliListJobs(allocator: std.mem.Allocator) !void {
     if (jobs.len == 0) {
         log.info("No scheduled tasks yet.", .{});
         log.info("Usage:", .{});
-        log.info("  nullclaw cron add '*/10 * * * *' 'echo hello'", .{});
-        log.info("  nullclaw cron once 30m 'echo reminder'", .{});
+        log.info("  zigclaw cron add '*/10 * * * *' 'echo hello'", .{});
+        log.info("  zigclaw cron once 30m 'echo reminder'", .{});
         return;
     }
 

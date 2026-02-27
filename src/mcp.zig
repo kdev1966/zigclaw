@@ -88,7 +88,7 @@ pub const McpServer = struct {
         // Send initialize request
         const init_params = try std.fmt.allocPrint(
             self.allocator,
-            "{{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{{}},\"clientInfo\":{{\"name\":\"nullclaw\",\"version\":\"{s}\"}}}}",
+            "{{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{{}},\"clientInfo\":{{\"name\":\"zigclaw\",\"version\":\"{s}\"}}}}",
             .{version.string},
         );
         defer self.allocator.free(init_params);

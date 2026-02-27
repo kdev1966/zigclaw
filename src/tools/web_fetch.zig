@@ -13,7 +13,7 @@ const net_security = @import("../root.zig").net_security;
 /// Default max chars for extracted content.
 const DEFAULT_MAX_CHARS: usize = 50_000;
 const WEB_FETCH_HEADERS = [_]std.http.Header{
-    .{ .name = "User-Agent", .value = "nullclaw/0.1 (web_fetch tool)" },
+    .{ .name = "User-Agent", .value = "zigclaw/0.1 (web_fetch tool)" },
     .{ .name = "Accept", .value = "text/html,application/json,text/plain,*/*" },
 };
 

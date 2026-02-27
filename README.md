@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="nullclaw.png" alt="nullclaw" width="200" />
+  <img src="zigclaw.png" alt="zigclaw" width="200" />
 </p>
 
-<h1 align="center">NullClaw</h1>
+<h1 align="center">ZigClaw</h1>
 
 <p align="center">
   <strong>Null overhead. Null compromise. 100% Zig. 100% Agnostic.</strong><br>
@@ -10,8 +10,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/nullclaw/nullclaw/actions/workflows/ci.yml"><img src="https://github.com/nullclaw/nullclaw/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="https://nullclaw.github.io"><img src="https://img.shields.io/badge/docs-nullclaw.github.io-informational" alt="Documentation" /></a>
+  <a href="https://github.com/kdev1966/zigclaw/actions/workflows/ci.yml"><img src="https://github.com/kdev1966/zigclaw/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://zigclaw.github.io"><img src="https://img.shields.io/badge/docs-zigclaw.github.io-informational" alt="Documentation" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
 </p>
 
@@ -29,7 +29,7 @@ The smallest fully autonomous AI assistant infrastructure — a static Zig binar
 - **True Portability:** Single self-contained binary across ARM, x86, and RISC-V. Drop it anywhere, it just runs.
 - **Feature-Complete:** 22+ providers, 17 channels, 18+ tools, hybrid vector+FTS5 memory, multi-layer sandbox, tunnels, hardware peripherals, MCP, subagents, streaming, voice — the full stack.
 
-### Why nullclaw
+### Why zigclaw
 
 - **Lean by default:** Zig compiles to a tiny static binary. No allocator overhead, no garbage collector, no runtime.
 - **Secure by design:** pairing, strict sandboxing (landlock, firejail, bubblewrap, docker), explicit allowlists, workspace scoping, encrypted secrets.
@@ -40,7 +40,7 @@ The smallest fully autonomous AI assistant infrastructure — a static Zig binar
 
 Local machine benchmark (macOS arm64, Feb 2026), normalized for 0.8 GHz edge hardware.
 
-| | [OpenClaw](https://github.com/openclaw/openclaw) | [NanoBot](https://github.com/HKUDS/nanobot) | [PicoClaw](https://github.com/sipeed/picoclaw) | [ZeroClaw](https://github.com/zeroclaw-labs/zeroclaw) | **[🦞 NullClaw](https://github.com/nullclaw/nullclaw)** |
+| | [OpenClaw](https://github.com/openclaw/openclaw) | [NanoBot](https://github.com/HKUDS/nanobot) | [PicoClaw](https://github.com/sipeed/picoclaw) | [ZeroClaw](https://github.com/zeroclaw-labs/zeroclaw) | **[🦞 ZigClaw](https://github.com/kdev1966/zigclaw)** |
 |---|---|---|---|---|---|
 | **Language** | TypeScript | Python | Go | Rust | **Zig** |
 | **RAM** | > 1 GB | > 100 MB | < 10 MB | < 5 MB | **~1 MB** |
@@ -50,16 +50,16 @@ Local machine benchmark (macOS arm64, Feb 2026), normalized for 0.8 GHz edge har
 | **Source Files** | ~400+ | — | — | ~120 | **~110** |
 | **Cost** | Mac Mini $599 | Linux SBC ~$50 | Linux Board $10 | Any $10 hardware | **Any $5 hardware** |
 
-> Measured with `/usr/bin/time -l` on ReleaseSmall builds. nullclaw is a static binary with zero runtime dependencies.
+> Measured with `/usr/bin/time -l` on ReleaseSmall builds. zigclaw is a static binary with zero runtime dependencies.
 
 Reproduce locally:
 
 ```bash
 zig build -Doptimize=ReleaseSmall
-ls -lh zig-out/bin/nullclaw
+ls -lh zig-out/bin/zigclaw
 
-/usr/bin/time -l zig-out/bin/nullclaw --help
-/usr/bin/time -l zig-out/bin/nullclaw status
+/usr/bin/time -l zig-out/bin/zigclaw --help
+/usr/bin/time -l zig-out/bin/zigclaw status
 ```
 
 ## Quick Start
@@ -69,50 +69,50 @@ ls -lh zig-out/bin/nullclaw
 > Verify before building: `zig version` should print `0.15.2`.
 
 ```bash
-git clone https://github.com/nullclaw/nullclaw.git
-cd nullclaw
+git clone https://github.com/kdev1966/zigclaw.git
+cd zigclaw
 zig build -Doptimize=ReleaseSmall
 
 # Quick setup
-nullclaw onboard --api-key sk-... --provider openrouter
+zigclaw onboard --api-key sk-... --provider openrouter
 
 # Or interactive wizard
-nullclaw onboard --interactive
+zigclaw onboard --interactive
 
 # Chat
-nullclaw agent -m "Hello, nullclaw!"
+zigclaw agent -m "Hello, zigclaw!"
 
 # Interactive mode
-nullclaw agent
+zigclaw agent
 
 # Start gateway runtime (gateway + all configured channels/accounts + heartbeat + scheduler)
-nullclaw gateway                # default: 127.0.0.1:3000
-nullclaw gateway --port 8080    # custom port
+zigclaw gateway                # default: 127.0.0.1:3000
+zigclaw gateway --port 8080    # custom port
 
 # Check status
-nullclaw status
+zigclaw status
 
 # Run system diagnostics
-nullclaw doctor
+zigclaw doctor
 
 # Check channel health
-nullclaw channel status
+zigclaw channel status
 
 # Start specific channels
-nullclaw channel start telegram
-nullclaw channel start discord
-nullclaw channel start signal
+zigclaw channel start telegram
+zigclaw channel start discord
+zigclaw channel start signal
 
 # Manage background service
-nullclaw service install
-nullclaw service status
+zigclaw service install
+zigclaw service status
 
 # Migrate memory from OpenClaw
-nullclaw migrate openclaw --dry-run
-nullclaw migrate openclaw
+zigclaw migrate openclaw --dry-run
+zigclaw migrate openclaw
 ```
 
-> **Dev fallback (no global install):** prefix commands with `zig-out/bin/` (example: `zig-out/bin/nullclaw status`).
+> **Dev fallback (no global install):** prefix commands with `zig-out/bin/` (example: `zig-out/bin/zigclaw status`).
 
 ## Edge MVP (Hybrid Host + WASM Logic)
 
@@ -171,7 +171,7 @@ All custom, zero external dependencies:
 
 ## Security
 
-nullclaw enforces security at **every layer**.
+zigclaw enforces security at **every layer**.
 
 | # | Item | Status | How |
 |---|------|--------|-----|
@@ -192,9 +192,9 @@ nullclaw enforces security at **every layer**.
 
 ## Configuration
 
-Config: `~/.nullclaw/config.json` (created by `onboard`)
+Config: `~/.zigclaw/config.json` (created by `onboard`)
 
-> **OpenClaw compatible:** nullclaw uses the same config structure as [OpenClaw](https://github.com/openclaw/openclaw) (snake_case). Providers live under `models.providers`, the default model under `agents.defaults.model.primary`, and channels use `accounts` wrappers.
+> **OpenClaw compatible:** zigclaw uses the same config structure as [OpenClaw](https://github.com/openclaw/openclaw) (snake_case). Providers live under `models.providers`, the default model under `agents.defaults.model.primary`, and channels use `accounts` wrappers.
 > Top-level `default_provider` / `default_model` keys are not supported.
 
 ```json
@@ -245,8 +245,8 @@ Config: `~/.nullclaw/config.json` (created by `onboard`)
         "main": {
           "host": "irc.libera.chat",
           "port": 6697,
-          "nick": "nullclaw",
-          "channel": "#nullclaw",
+          "nick": "zigclaw",
+          "channel": "#zigclaw",
           "tls": true,
           "allow_from": ["user1"]
         }
@@ -409,11 +409,11 @@ src/
 
 ## Versioning
 
-nullclaw uses **CalVer** (`YYYY.M.D`) for releases — e.g. `v2026.2.20`.
+zigclaw uses **CalVer** (`YYYY.M.D`) for releases — e.g. `v2026.2.20`.
 
 - **Tag format:** `vYYYY.M.D` (one release per day max; patch suffix `vYYYY.M.D.N` if needed)
 - **No stability guarantees yet** — the project is pre-1.0, config and CLI may change between releases
-- **`nullclaw --version`** prints the current version
+- **`zigclaw --version`** prints the current version
 
 ## Contributing
 
@@ -426,11 +426,11 @@ Implement a vtable interface, submit a PR:
 - New `Tunnel` -> `src/tunnel.zig`
 - New `Sandbox` backend -> `src/security/`
 - New `Peripheral` -> `src/peripherals.zig`
-- New `Skill` -> `~/.nullclaw/workspace/skills/<name>/`
+- New `Skill` -> `~/.zigclaw/workspace/skills/<name>/`
 
 ## Disclaimer
 
-nullclaw is a pure open-source software project. It has **no token, no cryptocurrency, no blockchain component, and no financial instrument** of any kind. This project is not affiliated with any token or financial product.
+zigclaw is a pure open-source software project. It has **no token, no cryptocurrency, no blockchain component, and no financial instrument** of any kind. This project is not affiliated with any token or financial product.
 
 ## License
 
@@ -438,8 +438,8 @@ MIT — see [LICENSE](LICENSE)
 
 ---
 
-**nullclaw** — Null overhead. Null compromise. Deploy anywhere. Swap anything.
+**zigclaw** — Null overhead. Null compromise. Deploy anywhere. Swap anything.
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=nullclaw/nullclaw&type=date&legend=top-left)](https://www.star-history.com/#nullclaw/nullclaw&type=date&legend=top-left)
+[![Star History Chart](https://api.star-history.com/svg?repos=kdev1966/zigclaw&type=date&legend=top-left)](https://www.star-history.com/#kdev1966/zigclaw&type=date&legend=top-left)

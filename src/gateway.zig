@@ -1,4 +1,4 @@
-//! HTTP Gateway — lightweight HTTP server for nullclaw.
+//! HTTP Gateway — lightweight HTTP server for zigclaw.
 //!
 //! Mirrors ZeroClaw's axum-based gateway with:
 //!   - Sliding-window rate limiting (per-IP)
@@ -1218,12 +1218,12 @@ pub fn extractBody(raw: []const u8) ?[]const u8 {
     return body;
 }
 
-/// Process an incoming message by spawning `nullclaw agent -m "..."`.
+/// Process an incoming message by spawning `zigclaw agent -m "..."`.
 /// Returns the agent's response text. Caller owns the returned memory.
 pub fn processIncomingMessage(allocator: std.mem.Allocator, message: []const u8) ![]u8 {
     // Find our own executable path
     var self_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const self_path = std.fs.selfExePath(&self_buf) catch "nullclaw";
+    const self_path = std.fs.selfExePath(&self_buf) catch "zigclaw";
 
     var child = std.process.Child.init(
         &[_][]const u8{ self_path, "agent", "-m", message },

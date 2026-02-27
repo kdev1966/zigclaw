@@ -6,7 +6,7 @@ const config_mod = @import("../config_types.zig");
 /// Resolution order:
 /// 1. Explicitly provided `api_key` parameter (trimmed, filtered if empty)
 /// 2. Provider-specific environment variable
-/// 3. Generic fallback variables (`NULLCLAW_API_KEY`, `API_KEY`)
+/// 3. Generic fallback variables (`ZIGCLAW_API_KEY`, `API_KEY`)
 pub fn resolveApiKey(
     allocator: std.mem.Allocator,
     provider_name: []const u8,
@@ -39,7 +39,7 @@ pub fn resolveApiKey(
     }
 
     // 3. Generic fallbacks
-    const fallbacks = [_][]const u8{ "NULLCLAW_API_KEY", "API_KEY" };
+    const fallbacks = [_][]const u8{ "ZIGCLAW_API_KEY", "API_KEY" };
     for (fallbacks) |env_var| {
         if (std.process.getEnvVarOwned(allocator, env_var)) |value| {
             const trimmed = std.mem.trim(u8, value, " \t\r\n");
@@ -115,7 +115,7 @@ fn providerEnvCandidates(name: []const u8) [3][]const u8 {
 /// Resolve API key with config providers as first priority, then env vars:
 ///   1. providers[].api_key from config
 ///   2. Provider-specific env var (GROQ_API_KEY, etc.)
-///   3. Generic fallbacks (NULLCLAW_API_KEY, API_KEY)
+///   3. Generic fallbacks (ZIGCLAW_API_KEY, API_KEY)
 pub fn resolveApiKeyFromConfig(
     allocator: std.mem.Allocator,
     provider_name: []const u8,

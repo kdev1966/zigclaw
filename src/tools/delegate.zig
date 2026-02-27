@@ -108,7 +108,7 @@ pub const DelegateTool = struct {
 
         // Fallback: no agent config found — load global config
         var cfg = Config.load(allocator) catch {
-            return ToolResult.fail("Failed to load config — run `nullclaw onboard` first");
+            return ToolResult.fail("Failed to load config — run `zigclaw onboard` first");
         };
         defer cfg.deinit();
 
